@@ -99,8 +99,13 @@ int main()
         const std::string data_dir = "../data/";
         auto bunny = load_obj(data_dir + "bunny.obj");
         for (auto& c : bunny.vertices) {
-            c *= 10.0f;
+            c *= 30.0f;
         }
+
+        //for (size_t i = 0; i < bunny.indices.size()/3; ++i) {
+        //    std::swap(bunny.indices[i*3], bunny.indices[i*3+2]);
+        //}
+
 #else
         int grid_size = 5;
         std::vector<position> vertices(grid_size * grid_size);

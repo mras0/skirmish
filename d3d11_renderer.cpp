@@ -312,22 +312,55 @@ public:
             1,                                     // FeatureLevels
             D3D11_SDK_VERSION,                     // SDKVersion
             &sd,                                   // pSwapChainDesc
-            &swap_chain,                           // ppSwapChain
-            &device,                               // ppDevice
+            &swap_chain_,                          // ppSwapChain
+            &device_,                              // ppDevice
             nullptr,                               // pFeatureLevel
-            &immediate_context                     // ppImmediateContext
+            &immediate_context_                    // ppImmediateContext
         ));
 
         // Get a pointer to the back buffer
         ComPtr<ID3D11Texture2D> back_buffer;
-        COM_CHECK(swap_chain->GetBuffer(0, IID_PPV_ARGS(&back_buffer)));
+        COM_CHECK(swap_chain_->GetBuffer(0, IID_PPV_ARGS(&back_buffer)));
 
         // Create a render-target view
-        COM_CHECK(device->CreateRenderTargetView(back_buffer.Get(), nullptr, &render_target_view));
+        COM_CHECK(device_->CreateRenderTargetView(back_buffer.Get(), nullptr, &render_target_view_));
 
-        // Bind the view
-        ID3D11RenderTargetView* targets[] = {render_target_view.Get()};
-        immediate_context->OMSetRenderTargets(_countof(targets), targets, nullptr);
+        // Set depth test state
+        D3D11_DEPTH_STENCIL_DESC ds_test_desc;
+        ZeroMemory(&ds_test_desc, sizeof(ds_test_desc));
+        ds_test_desc.DepthEnable = TRUE;
+        ds_test_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+        ds_test_desc.DepthFunc = D3D11_COMPARISON_LESS;
+        ComPtr<ID3D11DepthStencilState> ds_test;
+        COM_CHECK(device_->CreateDepthStencilState(&ds_test_desc, &ds_test));
+        immediate_context_->OMSetDepthStencilState(ds_test.Get(), 0);
+
+        
+        // Create depth buffer
+        D3D11_TEXTURE2D_DESC back_buffer_desc;
+        back_buffer->GetDesc(&back_buffer_desc);
+
+        D3D11_TEXTURE2D_DESC depth_desc;
+        depth_desc.Width = back_buffer_desc.Width;
+        depth_desc.Height = back_buffer_desc.Height;
+        depth_desc.MipLevels = 1;
+        depth_desc.ArraySize = 1;
+        depth_desc.Format = DXGI_FORMAT_D32_FLOAT;
+        depth_desc.SampleDesc.Count = 1;
+        depth_desc.SampleDesc.Quality = 0;
+        depth_desc.Usage = D3D11_USAGE_DEFAULT;
+        depth_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+        depth_desc.CPUAccessFlags = 0;
+        depth_desc.MiscFlags = 0;
+        ComPtr<ID3D11Texture2D> depth_stencil;
+        COM_CHECK(device_->CreateTexture2D(&depth_desc, nullptr, &depth_stencil));
+
+        // Create depth buffer view
+        COM_CHECK(device_->CreateDepthStencilView(depth_stencil.Get(), nullptr, &depth_stencil_view_));
+
+        // Bind the views
+        ID3D11RenderTargetView* targets[] = {render_target_view_.Get()};
+        immediate_context_->OMSetRenderTargets(_countof(targets), targets, depth_stencil_view_.Get());
 
         // Setup viewport
         D3D11_VIEWPORT vp;
@@ -337,9 +370,9 @@ public:
         vp.MaxDepth = 1.0f;
         vp.TopLeftX = 0;
         vp.TopLeftY = 0;
-        immediate_context->RSSetViewports(1, &vp);
+        immediate_context_->RSSetViewports(1, &vp);
 
-        create_context_.device = device.Get();
+        create_context_.device = device_.Get();
     }
 
     d3d11_create_context& create_context() {
@@ -348,16 +381,18 @@ public:
 
     void render() {
         float clear_color[4] = {0.0f, 0.125f, 0.6f, 1.0f}; // RGBA
-        immediate_context->ClearRenderTargetView(render_target_view.Get(), clear_color);
+        immediate_context_->ClearRenderTargetView(render_target_view_.Get(), clear_color);
+
+        immediate_context_->ClearDepthStencilView(depth_stencil_view_.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
         d3d11_render_context render_context {
-            immediate_context.Get()
+            immediate_context_.Get()
         };
         for (auto r : renderables_) {
             r->do_render(render_context);
         }
 
-        swap_chain->Present(0, 0);
+        swap_chain_->Present(0, 0);
     }
 
     void add_renderable(d3d11_renderable& r) {
@@ -365,10 +400,11 @@ public:
     }
 
 private:
-    ComPtr<IDXGISwapChain>          swap_chain;
-    ComPtr<ID3D11Device>            device;
-    ComPtr<ID3D11DeviceContext>     immediate_context;
-    ComPtr<ID3D11RenderTargetView>  render_target_view;
+    ComPtr<IDXGISwapChain>          swap_chain_;
+    ComPtr<ID3D11Device>            device_;
+    ComPtr<ID3D11DeviceContext>     immediate_context_;
+    ComPtr<ID3D11RenderTargetView>  render_target_view_;
+    ComPtr<ID3D11DepthStencilView>  depth_stencil_view_;
     std::vector<d3d11_renderable*>  renderables_;
     d3d11_create_context            create_context_;
 };
