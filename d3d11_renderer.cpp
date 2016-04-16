@@ -58,13 +58,6 @@ ComPtr<ID3DBlob> compile_shader(const char* data, const char* entry_point, const
     return blob;
 }
 
-// HRESULT CreateVertexShader(
-// [in]            const void               *pShaderBytecode,
-// [in]                  SIZE_T             BytecodeLength,
-// [in, optional]        ID3D11ClassLinkage *pClassLinkage,
-// [out, optional]       ID3D11VertexShader **ppVertexShader
-// );
-
 template<typename ShaderType>
 struct shader_traits;
 
@@ -137,9 +130,9 @@ VS_OUTPUT VS( float4 Pos : POSITION /*, float4 Color : COLOR */)
     output.Pos = mul( Pos, World );
     output.Pos = mul( output.Pos, View );
     output.Pos = mul( output.Pos, Projection );
-    //output.Color = Color;
-    output.Color = abs(output.Pos);
+    output.Color.rgb = 1-output.Pos.z/10;
     output.Color.a = 1;
+    //output.Color = Color;
     return output;
 }
 
