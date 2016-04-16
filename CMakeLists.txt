@@ -7,6 +7,9 @@ endif()
 
 set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "Supported build configurations" FORCE)
 
+enable_testing()
+add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --force-new-ctest-process --output-on-failure --build-config "$<CONFIGURATION>")
+
 # Reset flags
 set(CMAKE_CXX_FLAGS "/EHsc")
 set(CMAKE_CXX_FLAGS_DEBUG "/MTd /Od /D_DEBUG")
@@ -23,4 +26,11 @@ add_definitions("/W4")
 
 add_definitions("-DWIN32 -D_SCL_SECURE_NO_WARNINGS -DUNICODE -D_UNICODE")
 
-add_executable(skirmish main.cpp win32.cpp win32.h)
+add_library(skirmish_math vec.cpp vec.h)
+
+add_executable(skirmish main.cpp win32_main_window.cpp win32_main_window.h d3d11_renderer.cpp d3d11_renderer.h)
+target_link_libraries(skirmish skirmish_math)
+
+add_executable(test_math test_math.cpp)
+target_link_libraries(test_math skirmish_math)
+add_test(test_math test_math)

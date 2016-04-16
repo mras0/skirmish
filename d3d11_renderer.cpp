@@ -1,10 +1,10 @@
-#include "win32.h"
-#include <string>
-#include <system_error>
+#include "d3d11_renderer.h"
 #include <cassert>
+#include <string>
 #include <sstream>
 #include <vector>
-#include <windows.h>
+#include <stdexcept>
+#include <Windows.h>
 #include <wrl/client.h>
 
 #include <d3d11.h>
@@ -22,128 +22,12 @@ using namespace DirectX;
 
 namespace skirmish {
 
-void throw_system_error(const std::string& what, const unsigned error_code = GetLastError())
-{
-    assert(error_code != ERROR_SUCCESS);
-    throw std::system_error(error_code, std::system_category(), what);
-}
-
 void throw_com_error(const std::string& what, HRESULT hr) {
     assert(FAILED(hr));
     std::ostringstream oss;
     oss << what << ". HRESULT = 0x" << std::hex << hr;
     throw std::runtime_error(oss.str());
 }
-
-std::string wide_to_mb(const wchar_t* wide) {
-    auto convert = [wide](char* mb, int mblen) { return WideCharToMultiByte(CP_ACP, 0, wide, -1, mb, mblen, nullptr, nullptr); };
-    const int size = convert(nullptr, 0);
-    if (!size) {
-        throw_system_error("WideCharToMultiByte");
-    }
-    std::string result(size, '\0');
-    if (!convert(&result[0], size)) {
-        throw_system_error("WideCharToMultiByte");
-    }
-    assert(result.back() == '\0');
-    result.pop_back();
-    return result;
-}
-
-template<typename Derived>
-class window_base {
-public:
-    explicit window_base() {
-    }
-
-    ~window_base() {
-        if (hwnd_) {
-            assert(IsWindow(hwnd_));
-            DestroyWindow(hwnd_);
-        }
-        assert(!hwnd_);
-    }
-
-    void show() {
-        assert(hwnd_);
-        ShowWindow(hwnd_, SW_SHOWDEFAULT);
-    }
-
-    HWND hwnd() {
-        assert(hwnd_);
-        return hwnd_;
-    }
-
-protected:
-    void create() {
-        assert(!hwnd_);
-        register_class();
-
-        if (!CreateWindow(Derived::class_name(), L"Window", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, nullptr, nullptr, GetModuleHandle(nullptr), this)) {
-            throw_system_error("CreateWindow");
-        }
-        assert(hwnd_);
-    }
-
-private:
-    HWND hwnd_ = nullptr;
-
-    static void register_class() {
-        WNDCLASS wc ={0,};
-        wc.style         = CS_HREDRAW | CS_VREDRAW;
-        wc.lpfnWndProc   = s_wndproc;
-        wc.cbClsExtra    = 0;
-        wc.cbWndExtra    = 0;
-        wc.hInstance     = GetModuleHandle(nullptr);
-        wc.hIcon         = LoadIcon(nullptr, IDI_APPLICATION);
-        wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
-        wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-        wc.lpszMenuName  = nullptr;
-        wc.lpszClassName = Derived::class_name();
-
-        if (!RegisterClass(&wc)) {
-            // Todo: allow class to already be registered
-            throw_system_error("RegisterClass");
-        }
-    }
-
-    static LRESULT CALLBACK s_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-        window_base* self = nullptr;
-        if (msg == WM_NCCREATE) {
-            auto cs = *reinterpret_cast<const CREATESTRUCT*>(lparam);
-            self = reinterpret_cast<window_base*>(cs.lpCreateParams);
-            self->hwnd_ = hwnd;
-            SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
-        } else {
-            self = reinterpret_cast<window_base*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
-        }
-
-        if (msg == WM_NCDESTROY && self) {
-            auto ret = DefWindowProc(hwnd, msg, wparam, lparam);
-            SetWindowLongPtr(hwnd, GWLP_USERDATA, 0);
-            self->hwnd_ = nullptr;
-            return ret;
-        }
-
-        return self ? self->wndproc(hwnd, msg, wparam, lparam) : DefWindowProc(hwnd, msg, wparam, lparam);
-    }
-
-    LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-        assert(hwnd_ == hwnd);
-        switch (msg) {
-        case WM_CHAR:
-            SendMessage(hwnd, WM_CLOSE, 0, 0);
-            break;
-        case WM_PAINT:
-            static_cast<Derived*>(this)->on_paint();
-            return 0;
-        case WM_DESTROY:
-            PostQuitMessage(0);
-            break;
-        }
-        return DefWindowProc(hwnd, msg, wparam, lparam);
-    }
-};
 
 ComPtr<ID3DBlob> compile_shader(const char* data, const char* entry_point, const char* target)
 {
@@ -247,13 +131,15 @@ struct VS_OUTPUT
 //--------------------------------------------------------------------------------------
 // Vertex Shader
 //--------------------------------------------------------------------------------------
-VS_OUTPUT VS( float4 Pos : POSITION, float4 Color : COLOR )
+VS_OUTPUT VS( float4 Pos : POSITION /*, float4 Color : COLOR */)
 {
     VS_OUTPUT output = (VS_OUTPUT)0;
     output.Pos = mul( Pos, World );
     output.Pos = mul( output.Pos, View );
     output.Pos = mul( output.Pos, Projection );
-    output.Color = Color;
+    //output.Color = Color;
+    output.Color = abs(output.Pos);
+    output.Color.a = 1;
     return output;
 }
 
@@ -266,9 +152,20 @@ float4 PS( VS_OUTPUT input ) : SV_Target
 }
 )";
 
-class my_object {
+class d3d11_render_context {
 public:
-    explicit my_object(ID3D11Device* device) {
+    ID3D11DeviceContext* immediate_context;
+};
+
+class d3d11_create_context {
+public:
+    ID3D11Device* device;
+};
+
+class d3d11_simple_obj::impl {
+public:
+    explicit impl(d3d11_renderer& renderer, const array_view<float>& vertices, const array_view<uint16_t>& indices) {
+        auto device = renderer.create_context().device;
         ComPtr<ID3DBlob> vs_blob;
         create_shader(device, shader_source, "VS", vs.GetAddressOf(), &vs_blob);
         create_shader(device, shader_source, "PS", ps.GetAddressOf());
@@ -277,7 +174,7 @@ public:
         D3D11_INPUT_ELEMENT_DESC layout[] =
         {
             {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            //{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
         };
         UINT numElements = ARRAYSIZE(layout);
 
@@ -285,40 +182,9 @@ public:
         COM_CHECK(device->CreateInputLayout(layout, numElements, vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), &vertex_layout));
 
         // Create vertex buffer
-        std::vector<SimpleVertex> vertices =
-        {
-            {XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f)},
-            {XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f)},
-            {XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT4(0.0f, 1.0f, 1.0f, 1.0f)},
-            {XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f)},
-            {XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(1.0f, 0.0f, 1.0f, 1.0f)},
-            {XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT4(1.0f, 1.0f, 0.0f, 1.0f)},
-            {XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f)},
-            {XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f)},
-        };
         vertex_buffer = create_buffer(device, D3D11_BIND_VERTEX_BUFFER, vertices.data(), static_cast<UINT>(vertices.size() * sizeof(vertices[0])));
 
         // Create index buffer
-        std::vector<WORD> indices =
-        {
-            3,1,0,
-            2,1,3,
-
-            0,5,4,
-            1,5,0,
-
-            3,4,7,
-            0,4,3,
-
-            1,6,5,
-            2,6,1,
-
-            2,7,6,
-            3,7,2,
-
-            6,4,5,
-            7,4,6,
-        };
         index_count = static_cast<UINT>(indices.size());
         index_buffer = create_buffer(device, D3D11_BIND_INDEX_BUFFER, indices.data(), static_cast<UINT>(indices.size() * sizeof(indices[0])));
 
@@ -326,12 +192,13 @@ public:
         constant_buffer = create_buffer(device, D3D11_BIND_CONSTANT_BUFFER, nullptr, sizeof(ConstantBuffer));
     }
 
-    void draw(ID3D11DeviceContext* immediate_context) {
+    void do_render(d3d11_render_context& context) {
+        auto immediate_context = context.immediate_context;
         // Set the input layout
         immediate_context->IASetInputLayout(vertex_layout.Get());
 
         // Set vertex buffer
-        UINT stride = sizeof(SimpleVertex);
+        UINT stride = /*sizeof(SimpleVertex)*/ 3 * sizeof(float);
         UINT offset = 0;
         ID3D11Buffer* vertex_buffers[] = { vertex_buffer.Get() };
         immediate_context->IASetVertexBuffers(0, _countof(vertex_buffers), vertex_buffers, &stride, &offset);
@@ -350,10 +217,11 @@ public:
         const float t = static_cast<float>(static_cast<double>(count.QuadPart - init) / freq.QuadPart);
 
         // Initialize the world matrix
-        XMMATRIX world = XMMatrixRotationRollPitchYaw(t * 0.1f, t * -0.5f, t * 1.2f);
+        //XMMATRIX world = XMMatrixIdentity();//XMMatrixRotationRollPitchYaw(t * 0.1f, t * -0.5f, t * 1.2f);
+        XMMATRIX world = XMMatrixRotationRollPitchYaw(0.0f, 0.0f, t);
 
         // Initialize the view matrix
-        XMVECTOR Eye = XMVectorSet(0.0f, 1.0f, -5.0f, 0.0f);
+        XMVECTOR Eye = XMVectorSet(3.0f, 3.0f, -3.0f, 0.0f);
         XMVECTOR At = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
         XMVECTOR Up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
         XMMATRIX view = XMMatrixLookAtLH(Eye, At, Up);
@@ -380,9 +248,6 @@ public:
 
     }
 
-    my_object(const my_object&) = delete;
-    my_object& operator=(const my_object&) = delete;
-
 private:
     ComPtr<ID3D11VertexShader>  vs;
     ComPtr<ID3D11PixelShader>   ps;
@@ -392,11 +257,6 @@ private:
     ComPtr<ID3D11Buffer>        constant_buffer;
     UINT                        index_count;
 
-    struct SimpleVertex {
-        XMFLOAT3 Pos;
-        XMFLOAT4 Color;
-    };
-
     struct ConstantBuffer {
         XMMATRIX mWorld;
         XMMATRIX mView;
@@ -404,20 +264,25 @@ private:
     };
 };
 
+d3d11_simple_obj::d3d11_simple_obj(d3d11_renderer& renderer, const array_view<float>& vertices, const array_view<uint16_t>& indices) : impl_(new impl{renderer, vertices, indices}) {
+}
 
+d3d11_simple_obj::~d3d11_simple_obj() = default;
 
-class d3d11_window::impl : public window_base<d3d11_window::impl> {
+void d3d11_simple_obj::do_render(d3d11_render_context& context) {
+    impl_->do_render(context);
+}
+
+class d3d11_renderer::impl {
 public:
-    explicit impl(unsigned width, unsigned height) {
-        create();
+    explicit impl(win32_main_window& window) {
+        auto hwnd = window.native_handle();
 
-        // Don't allow maximize/resize
-        SetWindowLong(hwnd(), GWL_STYLE, GetWindowLong(hwnd(), GWL_STYLE) & ~(WS_MAXIMIZEBOX | WS_SIZEBOX));
+        RECT client_rect;
+        GetClientRect(hwnd, &client_rect);
+        const int width = client_rect.right - client_rect.left;
+        const int height = client_rect.bottom - client_rect.top;
 
-        // Adjust window size to match width/height
-        RECT rect = { 0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
-        AdjustWindowRectEx(&rect, GetWindowLong(hwnd(), GWL_STYLE), FALSE, GetWindowLong(hwnd(), GWL_EXSTYLE));
-        SetWindowPos(hwnd(), HWND_TOP, 0, 0, rect.right - rect.left, rect.bottom - rect.top, SWP_NOACTIVATE);
 
         //
         // Create device and swap chain
@@ -431,7 +296,7 @@ public:
         sd.BufferDesc.RefreshRate.Numerator = 60;
         sd.BufferDesc.RefreshRate.Denominator = 1;
         sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        sd.OutputWindow = hwnd();
+        sd.OutputWindow = hwnd;
         sd.SampleDesc.Count = 1;
         sd.SampleDesc.Quality = 0;
         sd.Windowed = TRUE;
@@ -474,18 +339,29 @@ public:
         vp.TopLeftY = 0;
         immediate_context->RSSetViewports(1, &vp);
 
-        obj_ = std::make_unique<my_object>(device.Get());
+        create_context_.device = device.Get();
     }
 
-    static const wchar_t* class_name() {
-        return L"d3d11_window";
+    d3d11_create_context& create_context() {
+        return create_context_;
     }
 
-    void on_paint() {
+    void render() {
         float clear_color[4] = {0.0f, 0.125f, 0.6f, 1.0f}; // RGBA
         immediate_context->ClearRenderTargetView(render_target_view.Get(), clear_color);
-        obj_->draw(immediate_context.Get());
+
+        d3d11_render_context render_context {
+            immediate_context.Get()
+        };
+        for (auto r : renderables_) {
+            r->do_render(render_context);
+        }
+
         swap_chain->Present(0, 0);
+    }
+
+    void add_renderable(d3d11_renderable& r) {
+        renderables_.push_back(&r);
     }
 
 private:
@@ -493,37 +369,29 @@ private:
     ComPtr<ID3D11Device>            device;
     ComPtr<ID3D11DeviceContext>     immediate_context;
     ComPtr<ID3D11RenderTargetView>  render_target_view;
-    std::unique_ptr<my_object>      obj_;
+    std::vector<d3d11_renderable*>  renderables_;
+    d3d11_create_context            create_context_;
 };
 
-d3d11_window::d3d11_window() : impl_(new impl{640, 480})
+d3d11_renderer::d3d11_renderer(win32_main_window& window) : impl_(new impl{window})
 {
 }
 
-d3d11_window::~d3d11_window() = default;
+d3d11_renderer::~d3d11_renderer() = default;
 
-void d3d11_window::show()
+d3d11_create_context& d3d11_renderer::create_context()
 {
-    impl_->show();
+    return impl_->create_context();
 }
 
-int run_message_loop(const on_idle_func& on_idle)
+void d3d11_renderer::render()
 {
-    assert(on_idle);
+    impl_->render();
+}
 
-    for (;;) {
-        MSG msg;
-        while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
-            if (msg.message == WM_QUIT) {
-                return static_cast<int>(msg.wParam);
-            }
-     
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-
-        on_idle();
-    }
+void d3d11_renderer::add_renderable(d3d11_renderable& r)
+{
+    impl_->add_renderable(r);
 }
 
 
