@@ -23,4 +23,4 @@ add_definitions("/W4")
 
 add_definitions("-DWIN32 -D_SCL_SECURE_NO_WARNINGS -DUNICODE -D_UNICODE")
 
-add_executable(skirmish main.cpp)
+add_executable(skirmish main.cpp win32.cpp win32.h)
