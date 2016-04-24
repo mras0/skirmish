@@ -180,9 +180,6 @@ public:
         // Create index buffer
         index_count = static_cast<UINT>(indices.size());
         index_buffer = create_buffer(device, D3D11_BIND_INDEX_BUFFER, indices.data(), static_cast<UINT>(indices.size() * sizeof(indices[0])));
-
-        // Create constant buffer
-        constant_buffer = create_buffer(device, D3D11_BIND_CONSTANT_BUFFER, nullptr, sizeof(ConstantBuffer));
     }
 
     void do_render(d3d11_render_context& context) {
@@ -202,37 +199,6 @@ public:
         // Set primitive topology
         immediate_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-        LARGE_INTEGER freq, count;
-        QueryPerformanceFrequency(&freq);
-        QueryPerformanceCounter(&count);
-        static LONGLONG init = count.QuadPart;
-
-        const float t = static_cast<float>(static_cast<double>(count.QuadPart - init) / freq.QuadPart);
-
-        // Initialize the world matrix
-        //XMMATRIX world = XMMatrixIdentity();//XMMatrixRotationRollPitchYaw(t * 0.1f, t * -0.5f, t * 1.2f);
-        XMMATRIX world = XMMatrixRotationRollPitchYaw(0.0f, 0.0f, t);
-
-        // Initialize the view matrix
-        XMVECTOR Eye = XMVectorSet(3.0f, 3.0f, -3.0f, 0.0f);
-        XMVECTOR At = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
-        XMVECTOR Up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-        XMMATRIX view = XMMatrixLookAtLH(Eye, At, Up);
-
-        // Initialize the projection matrix
-        XMMATRIX projection = XMMatrixPerspectiveFovLH(XM_PIDIV2, /*width / (FLOAT)height*/ 640.0f/480.0f, 0.01f, 100.0f);
-
-        // Update constant buffer
-        ConstantBuffer cb;
-        cb.mWorld = XMMatrixTranspose(world);
-        cb.mView = XMMatrixTranspose(view);
-        cb.mProjection = XMMatrixTranspose(projection);
-        immediate_context->UpdateSubresource(constant_buffer.Get(), 0, nullptr, &cb, 0, 0);
-
-        // Set constant buffer and shaders
-        ID3D11Buffer* constant_buffers[] = { constant_buffer.Get() };
-        immediate_context->VSSetConstantBuffers(0, _countof(constant_buffers), constant_buffers);
-
         immediate_context->VSSetShader(vs.Get(), nullptr, 0);
         immediate_context->PSSetShader(ps.Get(), nullptr, 0);
 
@@ -247,14 +213,7 @@ private:
     ComPtr<ID3D11InputLayout>   vertex_layout;
     ComPtr<ID3D11Buffer>        vertex_buffer;
     ComPtr<ID3D11Buffer>        index_buffer;
-    ComPtr<ID3D11Buffer>        constant_buffer;
     UINT                        index_count;
-
-    struct ConstantBuffer {
-        XMMATRIX mWorld;
-        XMMATRIX mView;
-        XMMATRIX mProjection;
-    };
 };
 
 d3d11_simple_obj::d3d11_simple_obj(d3d11_renderer& renderer, const array_view<float>& vertices, const array_view<uint16_t>& indices) : impl_(new impl{renderer, vertices, indices}) {
@@ -365,6 +324,9 @@ public:
         vp.TopLeftY = 0;
         immediate_context_->RSSetViewports(1, &vp);
 
+        // Create constant buffer
+        constant_buffer = create_buffer(device_.Get(), D3D11_BIND_CONSTANT_BUFFER, nullptr, sizeof(ConstantBuffer));
+
         create_context_.device = device_.Get();
     }
 
@@ -373,10 +335,43 @@ public:
     }
 
     void render() {
+        // Clear render target
         float clear_color[4] = {0.0f, 0.125f, 0.6f, 1.0f}; // RGBA
         immediate_context_->ClearRenderTargetView(render_target_view_.Get(), clear_color);
 
+        // Clear depth buffer
         immediate_context_->ClearDepthStencilView(depth_stencil_view_.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+        LARGE_INTEGER freq, count;
+        QueryPerformanceFrequency(&freq);
+        QueryPerformanceCounter(&count);
+        static LONGLONG init = count.QuadPart;
+
+        const float t = static_cast<float>(static_cast<double>(count.QuadPart - init) / freq.QuadPart);
+
+        // Initialize the world matrix
+        //XMMATRIX world = XMMatrixIdentity();//XMMatrixRotationRollPitchYaw(t * 0.1f, t * -0.5f, t * 1.2f);
+        XMMATRIX world = XMMatrixRotationRollPitchYaw(0.0f, 0.0f, t);
+
+        // Initialize the view matrix
+        XMVECTOR Eye = XMVectorSet(3.0f, 3.0f, -3.0f, 0.0f);
+        XMVECTOR At = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+        XMVECTOR Up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        XMMATRIX view = XMMatrixLookAtLH(Eye, At, Up);
+
+        // Initialize the projection matrix
+        XMMATRIX projection = XMMatrixPerspectiveFovLH(XM_PIDIV2, /*width / (FLOAT)height*/ 640.0f/480.0f, 0.01f, 100.0f);
+
+        // Update constant buffer
+        ConstantBuffer cb;
+        cb.mWorld = XMMatrixTranspose(world);
+        cb.mView = XMMatrixTranspose(view);
+        cb.mProjection = XMMatrixTranspose(projection);
+        immediate_context_->UpdateSubresource(constant_buffer.Get(), 0, nullptr, &cb, 0, 0);
+
+        // Set constant buffer and shaders
+        ID3D11Buffer* constant_buffers[] = { constant_buffer.Get() };
+        immediate_context_->VSSetConstantBuffers(0, _countof(constant_buffers), constant_buffers);
 
         d3d11_render_context render_context {
             immediate_context_.Get()
@@ -398,6 +393,12 @@ private:
     ComPtr<ID3D11DeviceContext>     immediate_context_;
     ComPtr<ID3D11RenderTargetView>  render_target_view_;
     ComPtr<ID3D11DepthStencilView>  depth_stencil_view_;
+    ComPtr<ID3D11Buffer>            constant_buffer;
+    struct ConstantBuffer {
+        XMMATRIX mWorld;
+        XMMATRIX mView;
+        XMMATRIX mProjection;
+    };
     std::vector<d3d11_renderable*>  renderables_;
     d3d11_create_context            create_context_;
 };
