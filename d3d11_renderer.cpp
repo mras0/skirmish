@@ -130,7 +130,7 @@ VS_OUTPUT VS( float4 Pos : POSITION /*, float4 Color : COLOR */)
     output.Pos = mul( Pos, World );
     output.Pos = mul( output.Pos, View );
     output.Pos = mul( output.Pos, Projection );
-    output.Color.rgb = 1-output.Pos.z/10;
+    output.Color.rgb = abs(Pos.xyz);
     output.Color.a = 1;
     //output.Color = Color;
     return output;
@@ -203,7 +203,7 @@ public:
         immediate_context->PSSetShader(ps.Get(), nullptr, 0);
 
         // Draw!
-        immediate_context->DrawIndexed(index_count, 0, 0);        // 36 vertices needed for 12 triangles in a triangle list
+        immediate_context->DrawIndexed(index_count, 0, 0);
 
     }
 
@@ -347,16 +347,17 @@ public:
         QueryPerformanceCounter(&count);
         static LONGLONG init = count.QuadPart;
 
-        const float t = static_cast<float>(static_cast<double>(count.QuadPart - init) / freq.QuadPart);
 
         // Initialize the world matrix
-        //XMMATRIX world = XMMatrixIdentity();//XMMatrixRotationRollPitchYaw(t * 0.1f, t * -0.5f, t * 1.2f);
-        XMMATRIX world = XMMatrixRotationRollPitchYaw(0.0f, 0.0f, t);
+        XMMATRIX world = XMMatrixIdentity();
+        //const float t = static_cast<float>(static_cast<double>(count.QuadPart - init) / freq.QuadPart);
+        //XMMatrixRotationRollPitchYaw(t * 0.1f, t * -0.5f, t * 1.2f);
+        //XMMatrixRotationRollPitchYaw(0.0f, 0.0f, t);
 
         // Initialize the view matrix
-        XMVECTOR Eye = XMVectorSet(3.0f, 3.0f, -3.0f, 0.0f);
+        XMVECTOR Eye = XMVectorSet(2.0f, 2.0f, 2.0f, 0.0f);
         XMVECTOR At = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
-        XMVECTOR Up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        XMVECTOR Up = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
         XMMATRIX view = XMMatrixLookAtLH(Eye, At, Up);
 
         // Initialize the projection matrix

@@ -99,7 +99,10 @@ int main()
         const std::string data_dir = "../data/";
         auto bunny = load_obj(data_dir + "bunny.obj");
         for (auto& c : bunny.vertices) {
-            c *= 30.0f;
+            auto cpy = c;
+            c.y = -cpy.z;
+            c.z = cpy.y;
+            c *= 10.0f;
         }
 
         //for (size_t i = 0; i < bunny.indices.size()/3; ++i) {
@@ -107,7 +110,7 @@ int main()
         //}
 
 #else
-        int grid_size = 5;
+        int grid_size = 11;
         std::vector<position> vertices(grid_size * grid_size);
         for (int y = 0; y < grid_size; ++y) {
             for (int x = 0; x < grid_size; ++x) {
@@ -125,13 +128,13 @@ int main()
         for (int y = 0; y < grid_size-1; ++y) {
             for (int x = 0; x < grid_size-1; ++x) {
                 int idx = x + y * grid_size;
-                indices.push_back(static_cast<uint16_t>(idx+1+grid_size));
+                indices.push_back(static_cast<uint16_t>(idx));
                 indices.push_back(static_cast<uint16_t>(idx+1));
-                indices.push_back(static_cast<uint16_t>(idx));
-
-                indices.push_back(static_cast<uint16_t>(idx));
-                indices.push_back(static_cast<uint16_t>(idx+grid_size));
                 indices.push_back(static_cast<uint16_t>(idx+1+grid_size));
+
+                indices.push_back(static_cast<uint16_t>(idx+1+grid_size));
+                indices.push_back(static_cast<uint16_t>(idx+grid_size));
+                indices.push_back(static_cast<uint16_t>(idx));
             }
         }
         obj_file_contents bunny{vertices, indices};
