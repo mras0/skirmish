@@ -23,6 +23,13 @@ struct mat {
     constexpr const row_type& operator[](unsigned r) const {
         return row[r];
     }
+
+    mat& operator*=(T rhs) {
+        for (unsigned r = 0; r < Rows; ++r) {
+            (*this)[r] *= rhs;
+        }
+        return *this;
+    }
 };
 
 template<unsigned Rows, unsigned Columns, typename T, typename tag>
@@ -35,6 +42,19 @@ auto operator*(const mat<Rows, Columns, T, tag>& m, const vec<Columns, T, tag>& 
     }
 
     return res;
+}
+
+template<unsigned Rows, unsigned Columns, typename T, typename tag>
+auto operator*(const mat<Rows, Columns, T, tag>& m, T scale)
+{
+    auto res = m;
+    return res *= scale;
+}
+
+template<unsigned Rows, unsigned Columns, typename T, typename tag>
+auto operator*(T scale, const mat<Rows, Columns, T, tag>& m)
+{
+    return m * scale;
 }
 
 template<typename tag>

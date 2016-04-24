@@ -9,6 +9,7 @@
 #include "win32_main_window.h"
 #include "d3d11_renderer.h"
 #include "vec.h"
+#include "mat.h"
 
 struct position_tag;
 
@@ -98,16 +99,16 @@ int main()
 #if 1
         const std::string data_dir = "../data/";
         auto bunny = load_obj(data_dir + "bunny.obj");
-        for (auto& c : bunny.vertices) {
-            auto cpy = c;
-            c.y = -cpy.z;
-            c.z = cpy.y;
-            c *= 10.0f;
-        }
 
-        //for (size_t i = 0; i < bunny.indices.size()/3; ++i) {
-        //    std::swap(bunny.indices[i*3], bunny.indices[i*3+2]);
-        //}
+        using position_mat = skirmish::mat33f<position_tag>;
+        const auto xform = 10.0f * position_mat{
+            -1, 0, 0,
+            0, 0, 1,
+            0, 1, 0};
+
+        for (auto& c : bunny.vertices) {
+            c = xform * c;
+        }
 
 #else
         int grid_size = 11;

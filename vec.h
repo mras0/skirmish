@@ -11,7 +11,7 @@ template<typename T, typename tag>
 struct vec<3, T, tag> {
     T x, y, z;
 
-    vec operator-() const {
+    constexpr vec operator-() const {
         return { -x, -y, -z };
     }
 

@@ -129,9 +129,12 @@ TEST_CASE("mat33") {
         REQUIRE(a[2].z == 9);
     }
     SECTION("mul vec3") {
-        auto res = a * vec3ft1{-2, 4.5f, 12};
-        REQUIRE(res.x == -2*1+4.5f*2+12*3);
-        REQUIRE(res.y == -2*4+4.5f*5+12*6);
-        REQUIRE(res.z == -2*7+4.5f*8+12*9);
+        const vec3ft1 v{-2, 4.5f, 12};
+        const vec3ft1 expected{-2*1+4.5f*2+12*3, -2*4+4.5f*5+12*6, -2*7+4.5f*8+12*9};
+        REQUIRE(a * v == expected);
+    }
+    SECTION("scale") {
+        REQUIRE((a*-2.0f)[1][1] == -10.0f);
+        REQUIRE((-2.0f*a)[1][1] == -10.0f);
     }
 }
