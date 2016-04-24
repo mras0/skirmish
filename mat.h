@@ -35,13 +35,13 @@ struct mat {
 template<unsigned Rows, unsigned Columns, typename T, typename tag>
 auto operator*(const mat<Rows, Columns, T, tag>& m, const vec<Columns, T, tag>& v)
 {
-    vec<Columns, T, tag> res{};
+    std::array<T, Columns> res{};
 
     for (unsigned r = 0; r < Rows; ++r) {
         res[r] = dot(m[r], v);
     }
 
-    return res;
+    return make_vec<tag>(res);
 }
 
 template<unsigned Rows, unsigned Columns, typename T, typename tag>

@@ -1,6 +1,8 @@
 #ifndef SKIRMISH_VEC_H
 #define SKIRMISH_VEC_H
 
+#include <array>
+
 namespace skirmish {
 
 template<unsigned Size, typename T, typename tag>
@@ -45,6 +47,12 @@ struct vec<3, T, tag> {
         return index == 0 ? x : index == 1 ? y : z;
     }
 };
+
+
+template<typename tag, typename T>
+constexpr vec<3, T, tag> make_vec(const std::array<T, 3>& arr) {
+    return {arr[0],arr[1],arr[2]};
+}
 
 // Generic
 template<unsigned Size, typename T, typename tag>
@@ -101,7 +109,6 @@ T dot(const vec<Size, T, tag>& l, const vec<Size, T, tag>& r) {
 
 template<typename tag>
 using vec3f = vec<3, float, tag>;
-
 
 } // namespace skirmish
 

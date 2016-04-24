@@ -35,6 +35,7 @@ TEST_CASE("vec3 construction") {
     REQUIRE((vec3ft1{1,2,3})[1] == 2);
     REQUIRE((vec3ft1{1,2,3})[2] == 3);
     REQUIRE(vec3ft1() == (vec3ft1{0,0,0}));
+    REQUIRE(make_vec<tag1>(std::array<float, 3>{1,2,3}) == (vec3ft1{1,2,3}));
 }
 
 TEST_CASE("vec3 boolean logic") {
