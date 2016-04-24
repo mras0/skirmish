@@ -105,7 +105,11 @@ int main()
             0, 0, 1,
             0, 1, 0};
 
-        std::transform(begin(obj.vertices), end(obj.vertices), begin(obj.vertices), [&m](const auto& v) { return m * v; });
+        //std::transform(begin(obj.vertices), end(obj.vertices), begin(obj.vertices), [&m](const auto& v) { return m * v; });
+        for (auto& v: obj.vertices) {
+            v = m * v;
+        }
+
 #else
         int grid_size = 11;
         std::vector<position> vertices(grid_size * grid_size);
@@ -138,7 +142,7 @@ int main()
 #endif
         win32_main_window w{640, 480};
         d3d11_renderer renderer{w};
-        d3d11_simple_obj render_obj{renderer, array_view<float>(&obj.vertices[0].x, static_cast<unsigned>(obj.vertices.size()*3)), make_array_view(obj.indices)};
+        d3d11_simple_obj render_obj{renderer, array_view<float>(&obj.vertices[0].x(), static_cast<unsigned>(obj.vertices.size()*3)), make_array_view(obj.indices)};
         renderer.add_renderable(render_obj);
         w.on_paint([&renderer] { renderer.render(); });
         w.show();

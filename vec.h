@@ -7,52 +7,46 @@
 namespace skirmish {
 
 template<unsigned Size, typename T, typename tag>
-struct vec;
+struct vec {
+    T v[Size];
 
-// vec3
-template<typename T, typename tag>
-struct vec<3, T, tag> {
-    T x, y, z;
+    T& operator[](size_t index) {
+        return v[index];
+    }
 
-    constexpr vec operator-() const {
-        return { -x, -y, -z };
+    constexpr T operator[](size_t index) const {
+        return v[index];
+    }
+
+#define MAKE_VEC_ACCESSOR(a_name, a_idx) T& a_name () { return v[a_idx]; } constexpr T a_name () const { return v[a_idx]; }
+MAKE_VEC_ACCESSOR(x, 0)
+MAKE_VEC_ACCESSOR(y, 1)
+MAKE_VEC_ACCESSOR(z, 2)
+#undef MAKE_VEC_ACCESSOR
+
+    vec operator-() const {
+        vec res{*this};
+        for (auto& e : res.v) e = -e;
+        return res;
     }
 
     vec& operator+=(const vec& rhs) {
-        x += rhs.x;
-        y += rhs.y;
-        z += rhs.z;
+        for (unsigned i = 0; i < Size; ++i) v[i] += rhs.v[i];
         return *this;
     }
 
     vec& operator-=(const vec& rhs) {
-        x -= rhs.x;
-        y -= rhs.y;
-        z -= rhs.z;
+        for (unsigned i = 0; i < Size; ++i) v[i] -= rhs.v[i];
         return *this;
     }
 
     template<typename Y>
     vec& operator*=(Y rhs) {
-        x *= rhs;
-        y *= rhs;
-        z *= rhs;
+        for (unsigned i = 0; i < Size; ++i) v[i] *= rhs;
         return *this;
-    }
-
-    T& operator[](unsigned index) {
-        return index == 0 ? x : index == 1 ? y : z;
-    }
-
-    constexpr T operator[](unsigned index) const {
-        return index == 0 ? x : index == 1 ? y : index == 2 ? z : throw -1;
     }
 };
 
-
-//
-// Generic
-//
 
 namespace detail {
 template<typename tag, unsigned Size, typename T, std::size_t... I>
