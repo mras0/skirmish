@@ -3,10 +3,13 @@
 #include <type_traits>
 #include <ostream>
 
-template<unsigned size, typename T, typename tag>
-std::ostream& operator<<(std::ostream& os, const skirmish::vec<size, T, tag>& v) {
-    static_assert(size == 3, "");
-    return os << "{ " << v.x() << ", " << v.y() << ", " << v.z() << " }";
+template<unsigned Size, typename T, typename tag>
+std::ostream& operator<<(std::ostream& os, const skirmish::vec<Size, T, tag>& v) {
+    os << "(";
+    for (unsigned i = 0; i < Size; ++i) {
+        os << " " << v[i];
+    }
+    return os << " )";
 }
 
 template<unsigned Rows, unsigned Columns, typename T, typename tag>
@@ -115,27 +118,46 @@ TEST_CASE("vec3 dot") {
     REQUIRE(dot(a, b) == (4+10+18));
 }
 
-TEST_CASE("mat33") {
-    using mat33ft1 = mat<3, 3, float, tag1>;
-    mat33ft1 a{1, 2, 3, 4, 5, 6, 7, 8, 9};
+TEST_CASE("mat3*f") {
+    using mat33 = mat<3, 3, float, tag1>;
+    using mat32 = mat<3, 2, float, tag1>;
+    mat33 m{1, 2, 3, 
+            4, 5, 6,
+            7, 8, 9};
+    mat32 n{1, 2,
+            3, 4,
+            5, 6};
     SECTION("init") {
-        REQUIRE(a[0].x() == 1);
-        REQUIRE(a[0].y() == 2);
-        REQUIRE(a[0].z() == 3);
-        REQUIRE(a[1].x() == 4);
-        REQUIRE(a[1].y() == 5);
-        REQUIRE(a[1].z() == 6);
-        REQUIRE(a[2].x() == 7);
-        REQUIRE(a[2].y() == 8);
-        REQUIRE(a[2].z() == 9);
+        REQUIRE(m[0].x() == 1);
+        REQUIRE(m[0].y() == 2);
+        REQUIRE(m[0].z() == 3);
+        REQUIRE(m[1].x() == 4);
+        REQUIRE(m[1].y() == 5);
+        REQUIRE(m[1].z() == 6);
+        REQUIRE(m[2].x() == 7);
+        REQUIRE(m[2].y() == 8);
+        REQUIRE(m[2].z() == 9);
+    }
+    SECTION("equality") {
+        REQUIRE(m == m);
+        REQUIRE(n == n);
+        REQUIRE(n != (mat32{2,1,3,4,5,6}));
     }
     SECTION("mul vec3") {
         const v3f v{-2, 4.5f, 12};
         const v3f expected{-2*1+4.5f*2+12*3, -2*4+4.5f*5+12*6, -2*7+4.5f*8+12*9};
-        REQUIRE(a * v == expected);
+        REQUIRE(m * v == expected);
     }
     SECTION("scale") {
-        REQUIRE((a*-2.0f)[1][1] == -10.0f);
-        REQUIRE((-2.0f*a)[1][1] == -10.0f);
+        REQUIRE((m*-2.0f)[1][1] == -10.0f);
+        REQUIRE((-2.0f*m)[1][1] == -10.0f);
+    }
+
+    SECTION("mul 33 32") {
+        REQUIRE(m*n == (mat32{
+            1*1+2*3+3*5, 1*2+2*4+3*6,
+            4*1+5*3+6*5, 4*2+5*4+6*6,
+            7*1+8*3+9*5, 7*2+8*4+9*6,
+        }));
     }
 }
