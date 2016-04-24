@@ -26,7 +26,7 @@ add_definitions("/W4")
 
 add_definitions("-DWIN32 -D_SCL_SECURE_NO_WARNINGS -DUNICODE -D_UNICODE")
 
-add_library(skirmish_math vec.cpp vec.h)
+add_library(skirmish_math vec.cpp vec.h math.cpp math.h)
 
 add_executable(skirmish main.cpp win32_main_window.cpp win32_main_window.h d3d11_renderer.cpp d3d11_renderer.h)
 target_link_libraries(skirmish skirmish_math)

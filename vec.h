@@ -37,6 +37,10 @@ struct vec<3, T, tag> {
         return *this;
     }
 
+    T& operator[](unsigned index) {
+        return index == 0 ? x : index == 1 ? y : z;
+    }
+
     constexpr T operator[](unsigned index) const {
         return index == 0 ? x : index == 1 ? y : z;
     }
@@ -83,6 +87,15 @@ template<unsigned Size, typename T, typename tag>
 vec<Size, T, tag> operator-(const vec<Size, T, tag>& l, const vec<Size, T, tag>& r) {
     auto res = l;
     res -= r;
+    return res;
+}
+
+template<unsigned Size, typename T, typename tag>
+T dot(const vec<Size, T, tag>& l, const vec<Size, T, tag>& r) {
+    T res(0);
+    for (unsigned i = 0; i < Size; ++i) {
+        res += l[i] * r[i];
+    }
     return res;
 }
 
