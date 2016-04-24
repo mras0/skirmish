@@ -23,26 +23,26 @@ std::ostream& operator<<(std::ostream& os, const skirmish::mat<Rows, Columns, T,
 using namespace skirmish;
 
 struct tag1;
-using vec3ft1 = vec3f<tag1>;
+using v3f = vec<3, float, tag1>;
 
-static_assert(std::is_pod<vec3ft1>::value, "vec3 must be POD!");
+static_assert(std::is_pod<v3f>::value, "vec3 must be POD!");
 
 TEST_CASE("vec3 construction") {
-    REQUIRE((vec3ft1{1,2,3}).x == 1);
-    REQUIRE((vec3ft1{1,2,3}).y == 2);
-    REQUIRE((vec3ft1{1,2,3}).z == 3);
-    REQUIRE((vec3ft1{1,2,3})[0] == 1);
-    REQUIRE((vec3ft1{1,2,3})[1] == 2);
-    REQUIRE((vec3ft1{1,2,3})[2] == 3);
-    REQUIRE(vec3ft1() == (vec3ft1{0,0,0}));
-    REQUIRE(make_vec<tag1>(std::array<float, 3>{1,2,3}) == (vec3ft1{1,2,3}));
+    REQUIRE((v3f{1,2,3}).x == 1);
+    REQUIRE((v3f{1,2,3}).y == 2);
+    REQUIRE((v3f{1,2,3}).z == 3);
+    REQUIRE((v3f{1,2,3})[0] == 1);
+    REQUIRE((v3f{1,2,3})[1] == 2);
+    REQUIRE((v3f{1,2,3})[2] == 3);
+    REQUIRE(v3f() == (v3f{0,0,0}));
+    REQUIRE(make_vec<tag1>(std::array<float, 3>{1,2,3}) == (v3f{1,2,3}));
 }
 
 TEST_CASE("vec3 boolean logic") {
-    const vec3ft1 a{1,2,3};
-    const vec3ft1 b{1.001f,2,3};
-    const vec3ft1 c{1,2.1f,3};
-    const vec3ft1 d{1,2,2};
+    const v3f a{1,2,3};
+    const v3f b{1.001f,2,3};
+    const v3f c{1,2.1f,3};
+    const v3f d{1,2,2};
     REQUIRE(a == a);
     REQUIRE(b == b);
     REQUIRE(c == c);
@@ -58,24 +58,24 @@ TEST_CASE("vec3 boolean logic") {
 }
 
 TEST_CASE("vec3 multiplication") {
-    vec3ft1 a{10, 20, 100};
+    v3f a{10, 20, 100};
     SECTION("negative") {
-        REQUIRE(a * -2.0f == (vec3ft1{-20, -40, -200}));
-        REQUIRE(-2.0f * a == (vec3ft1{-20, -40, -200}));
-        REQUIRE((a *= -2) == (vec3ft1{-20, -40, -200}));
+        REQUIRE(a * -2.0f == (v3f{-20, -40, -200}));
+        REQUIRE(-2.0f * a == (v3f{-20, -40, -200}));
+        REQUIRE((a *= -2) == (v3f{-20, -40, -200}));
     }
     SECTION("zero") {
-        REQUIRE((a *= 0) == (vec3ft1{0, 0, 0}));
+        REQUIRE((a *= 0) == (v3f{0, 0, 0}));
     }
     SECTION("positive") {
-        REQUIRE((a *= 1.1f) == (vec3ft1{11, 22, 110}));
+        REQUIRE((a *= 1.1f) == (v3f{11, 22, 110}));
     }
 }
 
 TEST_CASE("vec3 addition") {
-    vec3ft1 a{1, 2, 3};
-    vec3ft1 b{-3, 2.5f, 10};
-    const vec3ft1 sum{-2, 4.5f, 13};
+    v3f a{1, 2, 3};
+    v3f b{-3, 2.5f, 10};
+    const v3f sum{-2, 4.5f, 13};
     REQUIRE(a + b == sum);
     REQUIRE(b + a == sum);
     SECTION("a+=b") {
@@ -87,18 +87,18 @@ TEST_CASE("vec3 addition") {
 }
 
 TEST_CASE("vec3 negation") {
-    const vec3ft1 a{7, 4, -1};
-    const vec3ft1 na{-7, -4, 1};
+    const v3f a{7, 4, -1};
+    const v3f na{-7, -4, 1};
     REQUIRE(-a == na);
     REQUIRE(-na == a);
     REQUIRE(-(-a) == a);
 }
 
 TEST_CASE("vec3 subtraction") {
-    vec3ft1 a{1, 2, 3};
-    vec3ft1 b{-3, 2.5f, 10};
-    const vec3ft1 diff_ab{4, -0.5f, -7};
-    const vec3ft1 diff_ba{-4, 0.5f, 7};
+    v3f a{1, 2, 3};
+    v3f b{-3, 2.5f, 10};
+    const v3f diff_ab{4, -0.5f, -7};
+    const v3f diff_ba{-4, 0.5f, 7};
     REQUIRE(a - b == diff_ab);
     REQUIRE(b - a == diff_ba);
     SECTION("a-=b") {
@@ -110,13 +110,13 @@ TEST_CASE("vec3 subtraction") {
 }
 
 TEST_CASE("vec3 dot") {
-    vec3ft1 a{1, 2, 3};
-    vec3ft1 b{4, 5, 6};
+    v3f a{1, 2, 3};
+    v3f b{4, 5, 6};
     REQUIRE(dot(a, b) == (4+10+18));
 }
 
 TEST_CASE("mat33") {
-    using mat33ft1 = mat33f<tag1>;
+    using mat33ft1 = mat<3, 3, float, tag1>;
     mat33ft1 a{1, 2, 3, 4, 5, 6, 7, 8, 9};
     SECTION("init") {
         REQUIRE(a[0].x == 1);
@@ -130,8 +130,8 @@ TEST_CASE("mat33") {
         REQUIRE(a[2].z == 9);
     }
     SECTION("mul vec3") {
-        const vec3ft1 v{-2, 4.5f, 12};
-        const vec3ft1 expected{-2*1+4.5f*2+12*3, -2*4+4.5f*5+12*6, -2*7+4.5f*8+12*9};
+        const v3f v{-2, 4.5f, 12};
+        const v3f expected{-2*1+4.5f*2+12*3, -2*4+4.5f*5+12*6, -2*7+4.5f*8+12*9};
         REQUIRE(a * v == expected);
     }
     SECTION("scale") {

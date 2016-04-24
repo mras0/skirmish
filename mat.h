@@ -57,9 +57,6 @@ auto operator*(T scale, const mat<Rows, Columns, T, tag>& m)
     return m * scale;
 }
 
-template<typename tag>
-using mat33f = mat<3, 3, float, tag>;
-
 } // namespace skirmish
 
 #endif

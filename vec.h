@@ -2,6 +2,7 @@
 #define SKIRMISH_VEC_H
 
 #include <array>
+#include <utility> // make_index_sequence
 
 namespace skirmish {
 
@@ -44,17 +45,27 @@ struct vec<3, T, tag> {
     }
 
     constexpr T operator[](unsigned index) const {
-        return index == 0 ? x : index == 1 ? y : z;
+        return index == 0 ? x : index == 1 ? y : index == 2 ? z : throw -1;
     }
 };
 
 
-template<typename tag, typename T>
-constexpr vec<3, T, tag> make_vec(const std::array<T, 3>& arr) {
-    return {arr[0],arr[1],arr[2]};
+//
+// Generic
+//
+
+namespace detail {
+template<typename tag, unsigned Size, typename T, std::size_t... I>
+constexpr vec<Size, T, tag> make_vec_impl(const std::array<T, Size>& arr, std::index_sequence<I...>) {
+    return {arr[I]...};
+}
 }
 
-// Generic
+template<typename tag, unsigned Size, typename T>
+constexpr vec<Size, T, tag> make_vec(const std::array<T, Size>& arr) {
+    return detail::make_vec_impl<tag>(arr, std::make_index_sequence<Size>());
+}
+
 template<unsigned Size, typename T, typename tag>
 bool operator==(const vec<Size, T, tag>& l, const vec<Size, T, tag>& r) {
     for (unsigned i = 0; i < Size; ++i) {
@@ -75,7 +86,6 @@ vec<Size, T, tag> operator*(const vec<Size, T, tag>& l, Y r) {
     res *= r;
     return res;
 }
-
 
 template<unsigned Size, typename T, typename tag, typename Y>
 vec<Size, T, tag> operator*(Y l, const vec<Size, T, tag>& r) {
@@ -106,9 +116,6 @@ T dot(const vec<Size, T, tag>& l, const vec<Size, T, tag>& r) {
     }
     return res;
 }
-
-template<typename tag>
-using vec3f = vec<3, float, tag>;
 
 } // namespace skirmish
 

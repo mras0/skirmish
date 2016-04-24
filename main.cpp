@@ -13,7 +13,7 @@
 
 struct position_tag;
 
-using position = skirmish::vec3f<position_tag>;
+using position = skirmish::vec<3, float, position_tag>;
 
 #include <fstream>
 
@@ -98,18 +98,14 @@ int main()
     try {
 #if 1
         const std::string data_dir = "../data/";
-        auto bunny = load_obj(data_dir + "bunny.obj");
+        auto obj = load_obj(data_dir + "bunny.obj");
 
-        using position_mat = skirmish::mat33f<position_tag>;
-        const auto xform = 10.0f * position_mat{
+        const auto m = 10.0f * skirmish::mat<3, 3, float, position_tag>{
             -1, 0, 0,
             0, 0, 1,
             0, 1, 0};
 
-        for (auto& c : bunny.vertices) {
-            c = xform * c;
-        }
-
+        std::transform(begin(obj.vertices), end(obj.vertices), begin(obj.vertices), [&m](const auto& v) { return m * v; });
 #else
         int grid_size = 11;
         std::vector<position> vertices(grid_size * grid_size);
@@ -138,12 +134,12 @@ int main()
                 indices.push_back(static_cast<uint16_t>(idx));
             }
         }
-        obj_file_contents bunny{vertices, indices};
+        obj_file_contents obj{vertices, indices};
 #endif
         win32_main_window w{640, 480};
         d3d11_renderer renderer{w};
-        d3d11_simple_obj obj{renderer, array_view<float>(&bunny.vertices[0].x, static_cast<unsigned>(bunny.vertices.size()*3)), make_array_view(bunny.indices)};
-        renderer.add_renderable(obj);
+        d3d11_simple_obj render_obj{renderer, array_view<float>(&obj.vertices[0].x, static_cast<unsigned>(obj.vertices.size()*3)), make_array_view(obj.indices)};
+        renderer.add_renderable(render_obj);
         w.on_paint([&renderer] { renderer.render(); });
         w.show();
 

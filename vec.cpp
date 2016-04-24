@@ -2,6 +2,6 @@
 
 namespace skirmish {
 
-static_assert(sizeof(vec3f<void>) == sizeof(float)*3, "");
+static_assert(sizeof(vec<3, float, void>) == sizeof(float)*3, "");
 
 } // namespace skirmish
