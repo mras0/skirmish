@@ -161,12 +161,14 @@ int main()
 
         std::transform(begin(bunny.vertices), end(bunny.vertices), begin(bunny.vertices), [&m](const auto& v) { return m * v; });
         
-        constexpr float grid_scale = 5;
-        constexpr int grid_size = 150;
+        constexpr int grid_size = 250;
+        static_assert(grid_size * grid_size <= 65335, "Grid too large");
 
-        float persistence = 0.75f;
-        int number_of_octaves = 7;
-        float prescale = 16;
+        constexpr float grid_scale = grid_size / 5.0f;
+
+        float persistence = 0.45f;
+        int number_of_octaves = 9;
+        float prescale = grid_scale;
 
         std::vector<world_pos> vertices;
 
@@ -240,7 +242,7 @@ int main()
         world_pos camera_pos{grid_scale/2.0f, grid_scale/2.0f, 2.0f};
         float view_ang = -pi_f;
         w.on_paint([&] {
-            view_ang += 0.001f * (key_down[key::left] * -1 + key_down[key::right] * 1);
+            view_ang += 0.0025f * (key_down[key::left] * -1 + key_down[key::right] * 1);
             world_pos view_vec{sinf(view_ang), -cosf(view_ang), 0.0f};
 
             camera_pos += view_vec * (0.01f * (key_down[key::up] * 1 + key_down[key::down] * -1));
