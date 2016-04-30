@@ -189,10 +189,12 @@ public:
         // Create index buffer
         index_count = static_cast<UINT>(indices.size());
         index_buffer = create_buffer(device, D3D11_BIND_INDEX_BUFFER, indices.data(), static_cast<UINT>(indices.size() * sizeof(indices[0])));
+
+        // This might not be a great idea?
+        device->GetImmediateContext(immediate_context.GetAddressOf());
     }
 
-    void do_render(d3d11_render_context& context) {
-        auto immediate_context = context.immediate_context;
+    void do_render(d3d11_render_context&) {
         // Set the input layout
         immediate_context->IASetInputLayout(vertex_layout.Get());
 
@@ -215,12 +217,17 @@ public:
         immediate_context->DrawIndexed(index_count, 0, 0);
     }
 
+    void update_vertices(const array_view<world_pos>& vertices) {
+        immediate_context->UpdateSubresource(vertex_buffer.Get(), 0, nullptr, vertices.data(), 0, 0);
+    }
+
 private:
     ComPtr<ID3D11VertexShader>  vs;
     ComPtr<ID3D11PixelShader>   ps;
     ComPtr<ID3D11InputLayout>   vertex_layout;
     ComPtr<ID3D11Buffer>        vertex_buffer;
     ComPtr<ID3D11Buffer>        index_buffer;
+    ComPtr<ID3D11DeviceContext> immediate_context;
     UINT                        index_count;
 };
 
@@ -228,6 +235,10 @@ d3d11_simple_obj::d3d11_simple_obj(d3d11_renderer& renderer, const array_view<wo
 }
 
 d3d11_simple_obj::~d3d11_simple_obj() = default;
+
+void d3d11_simple_obj::update_vertices(const array_view<world_pos>& vertices) {
+    impl_->update_vertices(vertices);
+}
 
 void d3d11_simple_obj::do_render(d3d11_render_context& context) {
     impl_->do_render(context);

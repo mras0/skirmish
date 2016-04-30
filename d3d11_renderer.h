@@ -41,6 +41,9 @@ public:
     explicit d3d11_simple_obj(d3d11_renderer& renderer, const array_view<world_pos>& vertices, const array_view<uint16_t>& indices);
     ~d3d11_simple_obj();
     virtual void do_render(d3d11_render_context& context) override;
+
+    void update_vertices(const array_view<world_pos>& vertices);
+
 private:
     class impl;
     std::unique_ptr<impl> impl_;

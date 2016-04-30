@@ -1,18 +1,25 @@
 #include "perlin.h"
 #include <math.h>
+#include <assert.h>
 
 namespace {
 
-float interpolate(float a, float b, float x)
+constexpr float lerp(float a, float b, float x)
 {
     return a + (b - a) * x;
+}
+
+float interpolate(float a, float b, float x)
+{
+    const auto f = (1 - cosf(x * 3.1415927f)) * .5f;
+    return a*(1-f) + b*f;
 }
 
 float noise_1(int x, int y)
 {
     unsigned n = static_cast<unsigned>(x + y * 57);
     n = (n<<13) ^ n;
-    return 0.5f + 0.5f * ( 1.0f - ( (n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0f);
+    return ( 1.0f - ( (n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0f);
 }
 
 float smoothed_noise(int x, int y)
@@ -44,10 +51,11 @@ float interpolated_noise(float x, float y)
 
 } // unnamed namespace
 
-namespace skirmish {
+namespace skirmish { namespace perlin {
 
-float perlin_noise_2d(float x, float y, float persistence, int number_of_octaves)
+float noise_2d(float x, float y, float persistence, int number_of_octaves)
 {
+    assert(number_of_octaves >= 1 && number_of_octaves <= max_number_of_octaves);
     x = fabsf(x);
     y = fabsf(y);
 
@@ -62,7 +70,7 @@ float perlin_noise_2d(float x, float y, float persistence, int number_of_octaves
         frequency *= 2;
     }
 
-    return total / max_value;
+    return fabsf(total / max_value);
 }
 
-} // namespace skirmish
+} } // namespace skirmish::perlin

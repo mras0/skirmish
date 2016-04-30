@@ -7,6 +7,8 @@
 namespace {
 
 skirmish::key translate_key(WPARAM virtual_key) {
+    if (virtual_key >= 'A' && virtual_key <= 'Z') return static_cast<skirmish::key>(virtual_key);
+
     switch (virtual_key) {
     case VK_ESCAPE: return skirmish::key::escape;
     case VK_LEFT:   return skirmish::key::left;
@@ -20,6 +22,8 @@ skirmish::key translate_key(WPARAM virtual_key) {
 } // unnamed namespace
 
 namespace skirmish {
+
+static_assert(static_cast<int>(key::z) == 'Z', "");
 
 namespace detail { 
 

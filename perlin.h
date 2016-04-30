@@ -1,9 +1,12 @@
 #ifndef SKIRMISH_PERLIN_H
 #define SKIRMISH_PERLIN_H
 
-namespace skirmish {
+namespace skirmish { namespace perlin {
 
-extern float perlin_noise_2d(float x, float y, float persistence, int number_of_octaves);
+constexpr int max_number_of_octaves = 23;
 
-} // namespace skirmish
+float noise_2d(float x, float y, float persistence, int number_of_octaves);
+
+} } // namespace skirmish::perlin
+
 #endif

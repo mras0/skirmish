@@ -121,10 +121,35 @@ obj_file_contents load_obj(const std::string& filename)
     return res;
 }
 
+using namespace skirmish;
+
+auto calc_grid(int grid_size, float prescale, float grid_scale, float persistence, int number_of_octaves)
+{
+    std::vector<world_pos> vertices(grid_size * grid_size);
+    std::vector<uint8_t> height_map(grid_size * grid_size);
+    for (int y = 0; y < grid_size; ++y) {
+        for (int x = 0; x < grid_size; ++x) {
+            const auto index  = x + y * grid_size;
+            const auto fx = static_cast<float>(x) / grid_size;
+            const auto fy = static_cast<float>(y) / grid_size;
+            const auto fz = perlin::noise_2d(prescale*fx, prescale*fy, persistence, number_of_octaves);
+
+#ifndef NDEBUG
+            if (fz < 0 || fz > 1) {
+                std::cerr << "\n" << fz << "\n";
+                abort();
+            }
+#endif
+            height_map[index] = static_cast<uint8_t>(255.0f * fz);
+            vertices[index] = world_pos{fx*grid_scale, fy*grid_scale, fz};
+        }
+    }
+    tga::write_grayscale(open_file::binary_out("height.tga"), grid_size, grid_size, height_map.data());
+    return vertices;
+};
+
 int main()
 {
-    using namespace skirmish;
-
     try {
         const std::string data_dir = "../data/";
         auto bunny = load_obj(data_dir + "bunny.obj");
@@ -136,23 +161,20 @@ int main()
 
         std::transform(begin(bunny.vertices), end(bunny.vertices), begin(bunny.vertices), [&m](const auto& v) { return m * v; });
         
-        constexpr int grid_size = 150;
         constexpr float grid_scale = 5;
-        std::vector<world_pos> vertices(grid_size * grid_size);
-        std::vector<uint8_t> height_map(grid_size*grid_size);
-        for (int y = 0; y < grid_size; ++y) {
-            for (int x = 0; x < grid_size; ++x) {
-                const auto index  = x + y * grid_size;
-                const auto fx = static_cast<float>(x) / grid_size;
-                const auto fy = static_cast<float>(y) / grid_size;
-                const auto fz = perlin_noise_2d(fx, fy, 0.65f, 8);
-                assert(fz >= 0.0f && fz <= 1.0f);
-                height_map[index] = static_cast<uint8_t>(255.0f * fz);
-                vertices[index] = world_pos{fx * grid_scale, fy * grid_scale, fz};
-            }
-        }
+        constexpr int grid_size = 150;
 
-        tga::write_grayscale(open_file::binary_out("height.tga"), grid_size, grid_size, height_map.data());
+        float persistence = 0.75f;
+        int number_of_octaves = 7;
+        float prescale = 16;
+
+        std::vector<world_pos> vertices;
+
+        auto recalc_grid = [&] {
+            std::cout << "calc_grid(grid_size=" << grid_size << ", prescale=" << prescale << ", grid_scale=" << grid_scale << ", persistence=" << persistence << ", number_of_octaves=" << number_of_octaves << "\n";
+            vertices = calc_grid(grid_size, prescale, grid_scale, persistence, number_of_octaves);
+        };
+        recalc_grid();
 
         std::vector<uint16_t> indices;
         for (int y = 0; y < grid_size-1; ++y) {
@@ -167,24 +189,55 @@ int main()
                 indices.push_back(static_cast<uint16_t>(idx));
             }
         }
-        obj_file_contents terrain{vertices, indices};
 
         win32_main_window w{640, 480};
-        std::map<key, bool> key_down;
-
-        w.on_key_down([&](key k) {
-            key_down[k] = true; 
-            if (k == key::escape) w.close();
-        });
-        w.on_key_up([&](key k) { key_down[k] = false; });
+        std::map<key, bool> key_down;        
 
         d3d11_renderer renderer{w};
         d3d11_simple_obj bunny_obj{renderer, make_array_view(bunny.vertices), make_array_view(bunny.indices)};
-        d3d11_simple_obj terrain_obj{renderer, make_array_view(terrain.vertices), make_array_view(terrain.indices)};
+        d3d11_simple_obj terrain_obj{renderer, make_array_view(vertices), make_array_view(indices)};
         renderer.add_renderable(bunny_obj);
         renderer.add_renderable(terrain_obj);
 
-        world_pos camera_pos{grid_scale/2.0f, grid_scale/2.0f, 4};
+        w.on_key_down([&](key k) {
+            key_down[k] = true; 
+            bool needs_to_recalc_grid = false;
+            constexpr float persistence_step = 0.05f;
+            constexpr float prescale_step = 1;
+            if (k == key::a && number_of_octaves < perlin::max_number_of_octaves) {
+                ++number_of_octaves;
+                needs_to_recalc_grid = true;
+            } else if (k == key::z && number_of_octaves > 1) {
+                --number_of_octaves;
+                needs_to_recalc_grid = true;
+            } else if (k == key::s && persistence + persistence_step <= 1.0f) {
+                persistence += persistence_step;
+                needs_to_recalc_grid = true;
+            } else if (k == key::x && persistence - persistence_step >= 0.0f) {
+                persistence -= persistence_step;
+                needs_to_recalc_grid = true;
+            } else if (k == key::d) {
+                prescale += prescale_step;
+                needs_to_recalc_grid = true;
+            } else if (k == key::c && prescale - prescale_step >= 1) {
+                prescale -= prescale_step;
+                needs_to_recalc_grid = true;
+            }
+
+            if (needs_to_recalc_grid) {
+                recalc_grid();
+                terrain_obj.update_vertices(make_array_view(vertices));
+            }
+        });
+        w.on_key_up([&](key k) {
+            key_down[k] = false;
+
+            if (k == key::escape) {
+                w.close();
+            }
+        });
+
+        world_pos camera_pos{grid_scale/2.0f, grid_scale/2.0f, 2.0f};
         float view_ang = -pi_f;
         w.on_paint([&] {
             view_ang += 0.001f * (key_down[key::left] * -1 + key_down[key::right] * 1);
