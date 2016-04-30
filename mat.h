@@ -2,10 +2,11 @@
 #define SKIRMISH_MAT_H
 
 #include "vec.h"
+#include <utility> // make_index_sequence
 
 namespace skirmish {
 
-//
+//                           col0       col1       col2
 //     ( a00 a01 a02 )   ( A.row[0].x A.row[0].y A.row[0].z )
 // A = ( a10 a11 a12 ) = ( A.row[1].x A.row[1].y A.row[1].z )
 //     ( a20 a21 a22 )   ( A.row[2].x A.row[2].y A.row[2].z )
@@ -14,14 +15,31 @@ namespace skirmish {
 template<unsigned Rows, unsigned Columns, typename T, typename tag>
 struct mat {
     using row_type = vec<Columns, T, tag>;
-    row_type row[Rows];
+    row_type rows[Rows];
 
     row_type& operator[](unsigned r) {
-        return row[r];
+        return rows[r];
     }
 
     constexpr const row_type& operator[](unsigned r) const {
-        return row[r];
+        return rows[r];
+    }
+
+    row_type& row(unsigned r) {
+        return rows[r];
+    }
+
+    constexpr const row_type& row(unsigned r) const {
+        return rows[r];
+    }
+
+    template<std::size_t... I>
+    constexpr vec<sizeof...(I), T, tag> select_from_column(unsigned column, std::index_sequence<I...>) const {
+        return {rows[I][column]...};
+    }
+
+    constexpr vec<Rows, T, tag> col(unsigned column) const {
+        return select_from_column(column, std::make_index_sequence<Rows>());
     }
 
     mat& operator*=(T rhs) {
@@ -43,6 +61,12 @@ struct mat {
     bool operator!=(const mat& rhs) const {
         return !(*this == rhs);
     }
+    
+    constexpr static mat zero() {
+        return {};
+    }
+
+    constexpr static mat identity();
 };
 
 template<unsigned Rows, unsigned Columns, typename T, typename tag>
@@ -60,13 +84,11 @@ auto operator*(const mat<Rows, Columns, T, tag>& m, const vec<Columns, T, tag>& 
 template<unsigned R1, unsigned Common, unsigned C2, typename T, typename tag>
 auto operator*(const mat<R1, Common, T, tag>& lhs, const mat<Common, C2, T, tag>& rhs)
 {
-    mat<R1, C2, T, tag> res{};
+    mat<R1, C2, T, tag> res;
 
     for (unsigned r = 0; r < R1; ++ r) {
         for (unsigned c = 0; c < C2; ++c) {
-            for (unsigned i = 0; i < Common; ++i) {
-                res[r][c] += lhs[r][i] * rhs[i][c];
-            }
+            res[r][c] = dot(lhs.row(r), rhs.col(c));
         }
     }
 
@@ -85,6 +107,33 @@ auto operator*(T scale, const mat<Rows, Columns, T, tag>& m)
 {
     return m * scale;
 }
+
+namespace detail {
+
+template<unsigned Size, typename T, typename tag, std::size_t... I>
+constexpr vec<Size, T, tag> make_diag_row_impl(size_t index, const T& value, std::index_sequence<I...>) {
+    return { (I == index ? value : static_cast<T>(0))... };
+}
+
+template<unsigned Size, typename T, typename tag>
+constexpr vec<Size, T, tag> make_diag_row(size_t index, const T& value) {
+    return make_diag_row_impl<Size, T, tag>(index, value, std::make_index_sequence<Size>());
+}
+
+template<unsigned Columns, typename T, typename tag, std::size_t... I>
+constexpr mat<sizeof...(I), Columns, T, tag> make_identity_impl(std::index_sequence<I...>)
+{
+    return { make_diag_row<Columns, T, tag>(I, static_cast<T>(1))... };
+}
+
+} // namespace detail
+
+template<unsigned Rows, unsigned Columns, typename T, typename tag>
+constexpr mat<Rows, Columns, T, tag> mat<Rows, Columns, T, tag>::identity()
+{
+    return detail::make_identity_impl<Columns, T, tag>(std::make_index_sequence<Rows>());
+}
+
 
 } // namespace skirmish
 

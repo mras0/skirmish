@@ -21,12 +21,17 @@ std::ostream& operator<<(std::ostream& os, const skirmish::mat<Rows, Columns, T,
 }
 
 #define CATCH_CONFIG_MAIN
+#pragma warning(push)
+#pragma warning(disable: 4702)
 #include "catch.hpp"
+#pragma warning(pop)
 
 using namespace skirmish;
 
 struct tag1;
+using v2f = vec<2, float, tag1>;
 using v3f = vec<3, float, tag1>;
+using v4f = vec<3, float, tag1>;
 
 static_assert(std::is_pod<v3f>::value, "vec3 must be POD!");
 
@@ -118,6 +123,13 @@ TEST_CASE("vec3 dot") {
     REQUIRE(dot(a, b) == (4+10+18));
 }
 
+TEST_CASE("vector helpers") {
+    REQUIRE((detail::make_diag_row<3, float, tag1>(0, 8.0f)) == (v3f{8.0f,0,0}));
+    REQUIRE((detail::make_diag_row<3, float, tag1>(1, -3.0f)) == (v3f{0,-3.0f,0}));
+    REQUIRE((detail::make_diag_row<3, float, tag1>(2, 2.1f)) == (v3f{0,0,2.1f}));
+    REQUIRE((detail::make_diag_row<3, float, tag1>(3, 3.0f)) == (v3f{0,0,0}));
+}
+
 TEST_CASE("mat3*f") {
     using mat33 = mat<3, 3, float, tag1>;
     using mat32 = mat<3, 2, float, tag1>;
@@ -127,6 +139,11 @@ TEST_CASE("mat3*f") {
     mat32 n{1, 2,
             3, 4,
             5, 6};
+    static_assert(std::is_same_v<mat33::row_type, v3f>, "");
+    static_assert(std::is_same_v<decltype(m.col(0)), v3f>, "");
+    static_assert(std::is_same_v<mat32::row_type, v2f>, "");
+    static_assert(std::is_same_v<decltype(n.col(0)), v3f>, "");
+
     SECTION("init") {
         REQUIRE(m[0].x() == 1);
         REQUIRE(m[0].y() == 2);
@@ -137,6 +154,15 @@ TEST_CASE("mat3*f") {
         REQUIRE(m[2].x() == 7);
         REQUIRE(m[2].y() == 8);
         REQUIRE(m[2].z() == 9);
+        REQUIRE(m.col(0) == (v3f{1,4,7}));
+        REQUIRE(m.col(1) == (v3f{2,5,8}));
+        REQUIRE(m.col(2) == (v3f{3,6,9}));
+        REQUIRE(n.row(0) == (v2f{1,2}));
+        REQUIRE(n.col(0) == (v3f{1,3,5}));
+        REQUIRE(n.col(1) == (v3f{2,4,6}));
+        REQUIRE(mat32::zero()     == (mat32{0,0,0,0,0,0}));
+        REQUIRE(mat32::identity() == (mat32{1,0,0,1,0,0}));
+        REQUIRE(mat33::identity() == (mat33{1,0,0,0,1,0,0,0,1}));
     }
     SECTION("equality") {
         REQUIRE(m == m);
