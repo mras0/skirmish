@@ -2,6 +2,7 @@
 #define SKIRMISH_D3D11_RENDERER_H
 
 #include "win32_main_window.h"
+#include "skirmish.h"
 
 namespace skirmish {
 
@@ -37,7 +38,7 @@ array_view<typename C::value_type> make_array_view(const C& c) {
 
 class d3d11_simple_obj : public d3d11_renderable {
 public:
-    explicit d3d11_simple_obj(d3d11_renderer& renderer, const array_view<float>& vertices, const array_view<uint16_t>& indices);
+    explicit d3d11_simple_obj(d3d11_renderer& renderer, const array_view<world_pos>& vertices, const array_view<uint16_t>& indices);
     ~d3d11_simple_obj();
     virtual void do_render(d3d11_render_context& context) override;
 private:
@@ -53,6 +54,7 @@ public:
     virtual ~d3d11_renderer();
 
     d3d11_create_context& create_context();
+    void set_view(const world_pos& camera_pos, const world_pos& camera_target, const world_normal& up);
     void render();
     void add_renderable(d3d11_renderable& r);
 

@@ -11,15 +11,11 @@
 #include "vec.h"
 #include "mat.h"
 
-struct position_tag;
-
-using position = skirmish::vec<3, float, position_tag>;
-
 #include <fstream>
 
 struct obj_file_contents {
-    std::vector<position> vertices;
-    std::vector<uint16_t> indices;
+    std::vector<skirmish::world_pos> vertices;
+    std::vector<uint16_t>            indices;
 };
 
 obj_file_contents load_obj(const std::string& filename)
@@ -100,7 +96,7 @@ int main()
         const std::string data_dir = "../data/";
         auto obj = load_obj(data_dir + "bunny.obj");
 
-        const auto m = 10.0f * skirmish::mat<3, 3, float, position_tag>{
+        const auto m = 10.0f * world_mat{
             -1, 0, 0,
             0, 0, 1,
             0, 1, 0};
@@ -142,9 +138,15 @@ int main()
 #endif
         win32_main_window w{640, 480};
         d3d11_renderer renderer{w};
-        d3d11_simple_obj render_obj{renderer, array_view<float>(&obj.vertices[0].x(), static_cast<unsigned>(obj.vertices.size()*3)), make_array_view(obj.indices)};
+        d3d11_simple_obj render_obj{renderer, make_array_view(obj.vertices), make_array_view(obj.indices)};
         renderer.add_renderable(render_obj);
-        w.on_paint([&renderer] { renderer.render(); });
+        w.on_paint([&renderer] {
+            world_pos    pos{2, 2, 2};
+            world_pos    tgt{0, 0, 0};
+            world_normal up{0, 0, 1};
+            renderer.set_view(pos, tgt, up);
+            renderer.render();
+        });
         w.show();
 
         return run_message_loop(&on_idle);

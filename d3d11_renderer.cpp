@@ -20,6 +20,15 @@ using namespace DirectX;
 
 #define COM_CHECK(expr) do { HRESULT _hr = (expr); if (FAILED(_hr)) throw_com_error(#expr, _hr); } while (0)
 
+namespace {
+
+template<typename T, typename tag>
+XMVECTOR make_xmvec(const skirmish::vec<3, T, tag>& v, const T& w) {
+    return XMVectorSet(v.x(), v.y(), v.z(), w);
+}
+
+} // unnamed namespace
+
 namespace skirmish {
 
 void throw_com_error(const std::string& what, HRESULT hr) {
@@ -157,7 +166,7 @@ public:
 
 class d3d11_simple_obj::impl {
 public:
-    explicit impl(d3d11_renderer& renderer, const array_view<float>& vertices, const array_view<uint16_t>& indices) {
+    explicit impl(d3d11_renderer& renderer, const array_view<world_pos>& vertices, const array_view<uint16_t>& indices) {
         auto device = renderer.create_context().device;
         ComPtr<ID3DBlob> vs_blob;
         create_shader(device, shader_source, "VS", vs.GetAddressOf(), &vs_blob);
@@ -216,7 +225,7 @@ private:
     UINT                        index_count;
 };
 
-d3d11_simple_obj::d3d11_simple_obj(d3d11_renderer& renderer, const array_view<float>& vertices, const array_view<uint16_t>& indices) : impl_(new impl{renderer, vertices, indices}) {
+d3d11_simple_obj::d3d11_simple_obj(d3d11_renderer& renderer, const array_view<world_pos>& vertices, const array_view<uint16_t>& indices) : impl_(new impl{renderer, vertices, indices}) {
 }
 
 d3d11_simple_obj::~d3d11_simple_obj() = default;
@@ -328,10 +337,36 @@ public:
         constant_buffer = create_buffer(device_.Get(), D3D11_BIND_CONSTANT_BUFFER, nullptr, sizeof(ConstantBuffer));
 
         create_context_.device = device_.Get();
+
+        LARGE_INTEGER freq, count;
+        QueryPerformanceFrequency(&freq);
+        QueryPerformanceCounter(&count);
+        static LONGLONG init = count.QuadPart;
+
+
+        // Initialize constant buffer
+        XMMATRIX world = XMMatrixIdentity();
+
+        // Initialize the view matrix
+        XMVECTOR Eye = XMVectorSet(2.0f, 2.0f, 2.0f, 0.0f);
+        XMVECTOR At = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+        XMVECTOR Up = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+        XMMATRIX view = XMMatrixLookAtLH(Eye, At, Up);
+
+        // Initialize the projection matrix
+        XMMATRIX projection = XMMatrixPerspectiveFovLH(XM_PIDIV2, /*width / (FLOAT)height*/ 640.0f/480.0f, 0.01f, 100.0f);
+        constants_.mWorld = XMMatrixTranspose(world);
+        constants_.mView = XMMatrixTranspose(view);
+        constants_.mProjection = XMMatrixTranspose(projection);
     }
 
     d3d11_create_context& create_context() {
         return create_context_;
+    }
+
+    void set_view(const world_pos& camera_pos, const world_pos& camera_target, const world_normal& up) {
+        XMMATRIX view = XMMatrixLookAtLH(make_xmvec(camera_pos, 0.0f), make_xmvec(camera_target, 0.0f), make_xmvec(up, 0.0f));
+        constants_.mView = XMMatrixTranspose(view);
     }
 
     void render() {
@@ -342,33 +377,8 @@ public:
         // Clear depth buffer
         immediate_context_->ClearDepthStencilView(depth_stencil_view_.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
-        LARGE_INTEGER freq, count;
-        QueryPerformanceFrequency(&freq);
-        QueryPerformanceCounter(&count);
-        static LONGLONG init = count.QuadPart;
-
-
-        // Initialize the world matrix
-        XMMATRIX world = XMMatrixIdentity();
-        //const float t = static_cast<float>(static_cast<double>(count.QuadPart - init) / freq.QuadPart);
-        //XMMatrixRotationRollPitchYaw(t * 0.1f, t * -0.5f, t * 1.2f);
-        //XMMatrixRotationRollPitchYaw(0.0f, 0.0f, t);
-
-        // Initialize the view matrix
-        XMVECTOR Eye = XMVectorSet(2.0f, 2.0f, 2.0f, 0.0f);
-        XMVECTOR At = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
-        XMVECTOR Up = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-        XMMATRIX view = XMMatrixLookAtLH(Eye, At, Up);
-
-        // Initialize the projection matrix
-        XMMATRIX projection = XMMatrixPerspectiveFovLH(XM_PIDIV2, /*width / (FLOAT)height*/ 640.0f/480.0f, 0.01f, 100.0f);
-
         // Update constant buffer
-        ConstantBuffer cb;
-        cb.mWorld = XMMatrixTranspose(world);
-        cb.mView = XMMatrixTranspose(view);
-        cb.mProjection = XMMatrixTranspose(projection);
-        immediate_context_->UpdateSubresource(constant_buffer.Get(), 0, nullptr, &cb, 0, 0);
+        immediate_context_->UpdateSubresource(constant_buffer.Get(), 0, nullptr, &constants_, 0, 0);
 
         // Set constant buffer and shaders
         ID3D11Buffer* constant_buffers[] = { constant_buffer.Get() };
@@ -402,6 +412,7 @@ private:
     };
     std::vector<d3d11_renderable*>  renderables_;
     d3d11_create_context            create_context_;
+    ConstantBuffer                  constants_;
 };
 
 d3d11_renderer::d3d11_renderer(win32_main_window& window) : impl_(new impl{window})
@@ -413,6 +424,11 @@ d3d11_renderer::~d3d11_renderer() = default;
 d3d11_create_context& d3d11_renderer::create_context()
 {
     return impl_->create_context();
+}
+
+void d3d11_renderer::set_view(const world_pos& camera_pos, const world_pos& camera_target, const world_normal& up)
+{
+    impl_->set_view(camera_pos, camera_target, up);
 }
 
 void d3d11_renderer::render()
