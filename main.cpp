@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <map>
 #include <algorithm>
 #include <stdint.h>
 
@@ -12,6 +13,15 @@
 #include "mat.h"
 
 #include <fstream>
+
+template<unsigned Size, typename T, typename tag>
+std::ostream& operator<<(std::ostream& os, const skirmish::vec<Size, T, tag>& v) {
+    os << "(";
+    for (unsigned i = 0; i < Size; ++i) {
+        os << " " << v[i];
+    }
+    return os << " )";
+}
 
 struct obj_file_contents {
     std::vector<skirmish::world_pos> vertices;
@@ -132,16 +142,36 @@ int main()
         obj_file_contents terrain{vertices, indices};
 
         win32_main_window w{640, 480};
+        std::map<key, bool> key_down;
+
+        w.on_key_down([&](key k) {
+            key_down[k] = true; 
+            if (k == key::escape) w.close();
+        });
+        w.on_key_up([&](key k) { key_down[k] = false; });
+
         d3d11_renderer renderer{w};
         d3d11_simple_obj bunny_obj{renderer, make_array_view(bunny.vertices), make_array_view(bunny.indices)};
         d3d11_simple_obj terrain_obj{renderer, make_array_view(terrain.vertices), make_array_view(terrain.indices)};
         renderer.add_renderable(bunny_obj);
         renderer.add_renderable(terrain_obj);
-        w.on_paint([&renderer] {
-            world_pos    pos{2, 2, 2};
-            world_pos    tgt{0, 0, 0};
-            world_normal up{0, 0, 1};
-            renderer.set_view(pos, tgt, up);
+
+        world_pos camera_pos{4, 0, 4};
+        float view_ang = -pi_f;
+        w.on_paint([&] {
+            view_ang += 0.001f * (key_down[key::left] * 1 + key_down[key::right] * -1);
+            world_pos view_vec{cosf(view_ang), sinf(view_ang), 0.0f};
+
+            camera_pos += view_vec * (0.01f * (key_down[key::up] * 1 + key_down[key::down] * -1));
+
+            auto camera_target = camera_pos + view_vec;
+            camera_target[2] = 0;
+
+            std::ostringstream oss;
+            oss << camera_pos << " " << camera_target;
+            w.set_title(oss.str());
+
+            renderer.set_view(camera_pos, camera_target);
             renderer.render();
         });
         w.show();

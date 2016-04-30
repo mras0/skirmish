@@ -4,6 +4,21 @@
 #include <cassert>
 #include <windows.h>
 
+namespace {
+
+skirmish::key translate_key(WPARAM virtual_key) {
+    switch (virtual_key) {
+    case VK_ESCAPE: return skirmish::key::escape;
+    case VK_LEFT:   return skirmish::key::left;
+    case VK_RIGHT:  return skirmish::key::right;
+    case VK_UP:     return skirmish::key::up;
+    case VK_DOWN:   return skirmish::key::down;
+    }
+    return skirmish::key::one_past_max;
+}
+
+} // unnamed namespace
+
 namespace skirmish {
 
 namespace detail { 
@@ -53,6 +68,18 @@ public:
     void show() {
         assert(hwnd_);
         ShowWindow(hwnd_, SW_SHOWDEFAULT);
+    }
+
+    void close() {
+        SendMessage(hwnd(), WM_CLOSE, 0, 0);
+    }
+
+    void set_text(const std::string& text) {
+        // TODO: convert from ut8->utf16 and use SetWindowTextW
+#ifndef NDEBUG
+        for (auto c: text) assert(c >= 0 && c <= 127);
+#endif
+        SetWindowTextA(hwnd(), text.c_str());
     }
 
     HWND hwnd() {
@@ -117,9 +144,12 @@ private:
     LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
         assert(hwnd_ == hwnd);
         switch (msg) {
-        case WM_CHAR:
-            SendMessage(hwnd, WM_CLOSE, 0, 0);
-            break;
+        case WM_KEYDOWN:
+            static_cast<Derived*>(this)->handle_key_down(wparam, lparam);
+            return 0;
+        case WM_KEYUP:
+            static_cast<Derived*>(this)->handle_key_up(wparam, lparam);
+            return 0;
         case WM_PAINT:
             static_cast<Derived*>(this)->handle_paint();
             return 0;
@@ -161,6 +191,24 @@ public:
         }
     }
 
+    void handle_key_down(WPARAM virtual_key, LPARAM extended) {
+        auto k = translate_key(virtual_key);
+        if (k == key::one_past_max) return;
+        (void) extended;
+        if (on_key_down_) {
+            on_key_down_(k);
+        }
+    }
+
+    void handle_key_up(WPARAM virtual_key, LPARAM extended) {
+        auto k = translate_key(virtual_key);
+        if (k == key::one_past_max) return;
+        (void) extended;
+        if (on_key_up_) {
+            on_key_up_(k);
+        }
+    }
+
     on_paint_func on_paint() const {
         return on_paint_;
     }
@@ -169,8 +217,25 @@ public:
         on_paint_ = on_paint;
     }
 
+    on_key_down_func on_key_down() const {
+        return on_key_down_;
+    }
+
+    void on_key_down(const on_key_down_func& on_key_down) {
+        on_key_down_ = on_key_down;
+    }
+
+    on_key_up_func on_key_up() const {
+        return on_key_up_;
+    }
+
+    void on_key_up(const on_key_up_func& on_key_up) {
+        on_key_up_ = on_key_up;
+    }
 private:
     on_paint_func on_paint_;
+    on_key_down_func on_key_down_;
+    on_key_up_func on_key_up_;
 };
 
 win32_main_window::win32_main_window(unsigned width, unsigned height) : impl_(new impl{width, height})
@@ -182,6 +247,16 @@ win32_main_window::~win32_main_window() = default;
 void win32_main_window::show()
 {
     impl_->show();
+}
+
+void win32_main_window::close()
+{
+    impl_->close();
+}
+
+void win32_main_window::set_title(const std::string& text)
+{
+    impl_->set_text(text.c_str());
 }
 
 win32_main_window::native_handle_type win32_main_window::native_handle()
@@ -196,6 +271,24 @@ win32_main_window::on_paint_func win32_main_window::on_paint() const {
 void win32_main_window::on_paint(const on_paint_func& on_paint)
 {
     return impl_->on_paint(on_paint);
+}
+
+win32_main_window::on_key_down_func win32_main_window::on_key_down() const {
+    return impl_->on_key_down();
+}
+
+void win32_main_window::on_key_down(const on_key_down_func& on_key_down)
+{
+    return impl_->on_key_down(on_key_down);
+}
+
+win32_main_window::on_key_up_func win32_main_window::on_key_up() const {
+    return impl_->on_key_up();
+}
+
+void win32_main_window::on_key_up(const on_key_up_func& on_key_up)
+{
+    return impl_->on_key_up(on_key_up);
 }
 
 int run_message_loop(const on_idle_func& on_idle)

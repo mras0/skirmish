@@ -54,7 +54,7 @@ public:
     virtual ~d3d11_renderer();
 
     d3d11_create_context& create_context();
-    void set_view(const world_pos& camera_pos, const world_pos& camera_target, const world_normal& up);
+    void set_view(const world_pos& camera_pos, const world_pos& camera_target);
     void render();
     void add_renderable(d3d11_renderable& r);
 

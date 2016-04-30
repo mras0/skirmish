@@ -364,8 +364,8 @@ public:
         return create_context_;
     }
 
-    void set_view(const world_pos& camera_pos, const world_pos& camera_target, const world_normal& up) {
-        XMMATRIX view = XMMatrixLookAtLH(make_xmvec(camera_pos, 0.0f), make_xmvec(camera_target, 0.0f), make_xmvec(up, 0.0f));
+    void set_view(const world_pos& camera_pos, const world_pos& camera_target) {
+        XMMATRIX view = XMMatrixLookAtLH(make_xmvec(camera_pos, 0.0f), make_xmvec(camera_target, 0.0f), make_xmvec(world_up, 0.0f));
         constants_.mView = XMMatrixTranspose(view);
     }
 
@@ -426,9 +426,9 @@ d3d11_create_context& d3d11_renderer::create_context()
     return impl_->create_context();
 }
 
-void d3d11_renderer::set_view(const world_pos& camera_pos, const world_pos& camera_target, const world_normal& up)
+void d3d11_renderer::set_view(const world_pos& camera_pos, const world_pos& camera_target)
 {
-    impl_->set_view(camera_pos, camera_target, up);
+    impl_->set_view(camera_pos, camera_target);
 }
 
 void d3d11_renderer::render()

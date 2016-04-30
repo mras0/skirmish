@@ -8,6 +8,14 @@ struct HWND__;
 
 namespace skirmish {
 
+enum class key {
+    escape,
+    left, right, up, down,
+
+// Must be last
+    one_past_max
+};
+
 class win32_main_window {
 public:
     using native_handle_type = HWND__*;
@@ -20,10 +28,21 @@ public:
     native_handle_type native_handle();
 
     void show();
+    void close();
+
+    void set_title(const std::string& text);
 
     using on_paint_func = std::function<void (void)>;
     on_paint_func on_paint() const;
     void on_paint(const on_paint_func& on_paint);
+
+    using on_key_down_func = std::function<void (key)>;
+    on_key_down_func on_key_down() const;
+    void on_key_down(const on_key_down_func& on_key_down);
+
+    using on_key_up_func = std::function<void (key)>;
+    on_key_up_func on_key_up() const;
+    void on_key_up(const on_key_up_func& on_key_up);
 
 private:
     class impl;
