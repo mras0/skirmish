@@ -1,6 +1,8 @@
 #include "perlin.h"
 #include <math.h>
 
+namespace {
+
 float interpolate(float a, float b, float x)
 {
     return a + (b - a) * x;
@@ -40,6 +42,10 @@ float interpolated_noise(float x, float y)
     return interpolate(i1, i2, fractional_Y);
 }
 
+} // unnamed namespace
+
+namespace skirmish {
+
 float perlin_noise_2d(float x, float y, float persistence, int number_of_octaves)
 {
     x = fabsf(x);
@@ -58,3 +64,5 @@ float perlin_noise_2d(float x, float y, float persistence, int number_of_octaves
 
     return total / max_value;
 }
+
+} // namespace skirmish

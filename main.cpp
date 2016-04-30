@@ -13,8 +13,37 @@
 #include "vec.h"
 #include "mat.h"
 #include "perlin.h"
+#include "tga.h"
 
 #include <fstream>
+
+class open_file {
+public:
+    static open_file text_in(const std::string& filename) {
+        return open_file{filename, std::ios_base::in};
+    }
+
+    static open_file binary_out(const std::string& filename) {
+        return open_file{filename, std::ios_base::binary | std::ios_base::out};
+    }
+
+    operator std::istream&() {
+        return s_;
+    }
+
+    operator std::ostream&() {
+        return s_;
+    }
+
+private:
+    explicit open_file(const std::string& filename, std::ios_base::openmode mode) : s_{filename.c_str(), mode} {
+        if (!s_) {
+            throw std::runtime_error("Could not open '" + filename + "'");
+        }
+    }
+
+    std::fstream s_;
+};
 
 template<unsigned Size, typename T, typename tag>
 std::ostream& operator<<(std::ostream& os, const skirmish::vec<Size, T, tag>& v) {
@@ -32,10 +61,8 @@ struct obj_file_contents {
 
 obj_file_contents load_obj(const std::string& filename)
 {
-    std::ifstream in{filename};
-    if (!in) {
-        throw std::runtime_error("Could not open '" + filename + "'");
-    }
+    auto f = open_file::text_in(filename);
+    std::istream& in = f;
 
     obj_file_contents res;
 
@@ -94,40 +121,6 @@ obj_file_contents load_obj(const std::string& filename)
     return res;
 }
 
-void write_grayscale_tga(std::ostream& os, unsigned width, unsigned height, const uint8_t* data)
-{
-    enum class tga_color_map_type : uint8_t { none = 0, present = 1 };
-    enum class tga_image_type : uint8_t { uncompressed_true_color = 2, uncompressed_grayscale = 3 };
-    auto put_u8 = [&](uint8_t x) { os.put(static_cast<char>(x)); };
-    auto put_u16 = [&](uint16_t x) { put_u8(x&0xff); put_u8(x>>8); };
-    auto put_u32 = [&](uint32_t x) { put_u16(x&0xffff); put_u16(x>>16); };
-
-    put_u8(0); // ID length
-    put_u8(static_cast<uint8_t>(tga_color_map_type::none));               // Color map type
-    put_u8(static_cast<uint8_t>(tga_image_type::uncompressed_grayscale)); // Image type
-    // Color map specification
-    put_u16(0); // First entry index
-    put_u16(0); // Color map length
-    put_u8(0);  // Bits per pixel
-    // Image specificatio
-    put_u16(0);                             // X-origin
-    put_u16(0);                             // Y-origin
-    put_u16(static_cast<uint16_t>(width));  // Width
-    put_u16(static_cast<uint16_t>(height)); // Height
-    put_u8(8);                              // Pixel depth (BPP)
-    put_u8(0); // Image descriptor (1 byte): bits 3-0 give the alpha channel depth, bits 5-4 give direction
-    // Image ID
-    // Color map
-    // Image
-    os.write(reinterpret_cast<const char*>(data), width * height);
-}
-
-void write_grayscale_tga(const std::string& filename, unsigned width, unsigned height, const uint8_t* data)
-{
-    std::ofstream out(filename.c_str(), std::ofstream::binary);
-    write_grayscale_tga(out, width, height, data);
-}
-
 int main()
 {
     using namespace skirmish;
@@ -159,7 +152,7 @@ int main()
             }
         }
 
-        write_grayscale_tga("height.tga", grid_size, grid_size, height_map.data());
+        tga::write_grayscale(open_file::binary_out("height.tga"), grid_size, grid_size, height_map.data());
 
         std::vector<uint16_t> indices;
         for (int y = 0; y < grid_size-1; ++y) {

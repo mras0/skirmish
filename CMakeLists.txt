@@ -28,8 +28,10 @@ add_definitions("-DWIN32 -D_SCL_SECURE_NO_WARNINGS -DUNICODE -D_UNICODE")
 
 add_library(skirmish_math vec.cpp vec.h mat.cpp mat.h)
 
-add_executable(skirmish main.cpp skirmish.h win32_main_window.cpp win32_main_window.h d3d11_renderer.cpp d3d11_renderer.h perlin.cpp perlin.h)
-target_link_libraries(skirmish skirmish_math)
+add_library(skirmish_util perlin.cpp perlin.h tga.cpp tga.h)
+
+add_executable(skirmish main.cpp skirmish.h win32_main_window.cpp win32_main_window.h d3d11_renderer.cpp d3d11_renderer.h)
+target_link_libraries(skirmish skirmish_math skirmish_util)
 
 add_executable(test_math test_math.cpp)
 target_link_libraries(test_math skirmish_math)
