@@ -6,11 +6,13 @@
 #include <map>
 #include <algorithm>
 #include <stdint.h>
+#include <cassert>
 
 #include "win32_main_window.h"
 #include "d3d11_renderer.h"
 #include "vec.h"
 #include "mat.h"
+#include "perlin.h"
 
 #include <fstream>
 
@@ -92,9 +94,38 @@ obj_file_contents load_obj(const std::string& filename)
     return res;
 }
 
-
-void on_idle()
+void write_grayscale_tga(std::ostream& os, unsigned width, unsigned height, const uint8_t* data)
 {
+    enum class tga_color_map_type : uint8_t { none = 0, present = 1 };
+    enum class tga_image_type : uint8_t { uncompressed_true_color = 2, uncompressed_grayscale = 3 };
+    auto put_u8 = [&](uint8_t x) { os.put(static_cast<char>(x)); };
+    auto put_u16 = [&](uint16_t x) { put_u8(x&0xff); put_u8(x>>8); };
+    auto put_u32 = [&](uint32_t x) { put_u16(x&0xffff); put_u16(x>>16); };
+
+    put_u8(0); // ID length
+    put_u8(static_cast<uint8_t>(tga_color_map_type::none));               // Color map type
+    put_u8(static_cast<uint8_t>(tga_image_type::uncompressed_grayscale)); // Image type
+    // Color map specification
+    put_u16(0); // First entry index
+    put_u16(0); // Color map length
+    put_u8(0);  // Bits per pixel
+    // Image specificatio
+    put_u16(0);                             // X-origin
+    put_u16(0);                             // Y-origin
+    put_u16(static_cast<uint16_t>(width));  // Width
+    put_u16(static_cast<uint16_t>(height)); // Height
+    put_u8(8);                              // Pixel depth (BPP)
+    put_u8(0); // Image descriptor (1 byte): bits 3-0 give the alpha channel depth, bits 5-4 give direction
+    // Image ID
+    // Color map
+    // Image
+    os.write(reinterpret_cast<const char*>(data), width * height);
+}
+
+void write_grayscale_tga(const std::string& filename, unsigned width, unsigned height, const uint8_t* data)
+{
+    std::ofstream out(filename.c_str(), std::ofstream::binary);
+    write_grayscale_tga(out, width, height, data);
 }
 
 int main()
@@ -112,20 +143,24 @@ int main()
 
         std::transform(begin(bunny.vertices), end(bunny.vertices), begin(bunny.vertices), [&m](const auto& v) { return m * v; });
         
-        int grid_size = 11;
+        constexpr int grid_size = 150;
+        constexpr float grid_scale = 5;
         std::vector<world_pos> vertices(grid_size * grid_size);
+        std::vector<uint8_t> height_map(grid_size*grid_size);
         for (int y = 0; y < grid_size; ++y) {
             for (int x = 0; x < grid_size; ++x) {
-                auto& v = vertices[x + y * grid_size];
-
-                const float g2 = grid_size / 2.0f;
-                const auto fx = (x - g2) / g2;
-                const auto fy = (y - g2) / g2;
-
-                v = world_pos{fx, fy, 0.1f*sin(10*sqrt(fx*fx+fy*fy))};
-
+                const auto index  = x + y * grid_size;
+                const auto fx = static_cast<float>(x) / grid_size;
+                const auto fy = static_cast<float>(y) / grid_size;
+                const auto fz = perlin_noise_2d(fx, fy, 0.65f, 8);
+                assert(fz >= 0.0f && fz <= 1.0f);
+                height_map[index] = static_cast<uint8_t>(255.0f * fz);
+                vertices[index] = world_pos{fx * grid_scale, fy * grid_scale, fz};
             }
         }
+
+        write_grayscale_tga("height.tga", grid_size, grid_size, height_map.data());
+
         std::vector<uint16_t> indices;
         for (int y = 0; y < grid_size-1; ++y) {
             for (int x = 0; x < grid_size-1; ++x) {
@@ -156,11 +191,11 @@ int main()
         renderer.add_renderable(bunny_obj);
         renderer.add_renderable(terrain_obj);
 
-        world_pos camera_pos{4, 0, 4};
+        world_pos camera_pos{grid_scale/2.0f, grid_scale/2.0f, 4};
         float view_ang = -pi_f;
         w.on_paint([&] {
-            view_ang += 0.001f * (key_down[key::left] * 1 + key_down[key::right] * -1);
-            world_pos view_vec{cosf(view_ang), sinf(view_ang), 0.0f};
+            view_ang += 0.001f * (key_down[key::left] * -1 + key_down[key::right] * 1);
+            world_pos view_vec{sinf(view_ang), -cosf(view_ang), 0.0f};
 
             camera_pos += view_vec * (0.01f * (key_down[key::up] * 1 + key_down[key::down] * -1));
 
@@ -176,7 +211,7 @@ int main()
         });
         w.show();
 
-        return run_message_loop(&on_idle);
+        return run_message_loop([]{/*on_idle*/});
     } catch (const std::exception& e) {
         std::cerr << e.what() << "\n";
         return -1;
