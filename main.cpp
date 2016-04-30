@@ -92,23 +92,18 @@ int main()
     using namespace skirmish;
 
     try {
-#if 1
         const std::string data_dir = "../data/";
-        auto obj = load_obj(data_dir + "bunny.obj");
+        auto bunny = load_obj(data_dir + "bunny.obj");
 
         const auto m = 10.0f * world_mat{
             -1, 0, 0,
             0, 0, 1,
             0, 1, 0};
 
-        //std::transform(begin(obj.vertices), end(obj.vertices), begin(obj.vertices), [&m](const auto& v) { return m * v; });
-        for (auto& v: obj.vertices) {
-            v = m * v;
-        }
-
-#else
+        std::transform(begin(bunny.vertices), end(bunny.vertices), begin(bunny.vertices), [&m](const auto& v) { return m * v; });
+        
         int grid_size = 11;
-        std::vector<position> vertices(grid_size * grid_size);
+        std::vector<world_pos> vertices(grid_size * grid_size);
         for (int y = 0; y < grid_size; ++y) {
             for (int x = 0; x < grid_size; ++x) {
                 auto& v = vertices[x + y * grid_size];
@@ -117,7 +112,7 @@ int main()
                 const auto fx = (x - g2) / g2;
                 const auto fy = (y - g2) / g2;
 
-                v = position{fx, fy, 0.1f*sin(10*sqrt(fx*fx+fy*fy))};
+                v = world_pos{fx, fy, 0.1f*sin(10*sqrt(fx*fx+fy*fy))};
 
             }
         }
@@ -134,12 +129,14 @@ int main()
                 indices.push_back(static_cast<uint16_t>(idx));
             }
         }
-        obj_file_contents obj{vertices, indices};
-#endif
+        obj_file_contents terrain{vertices, indices};
+
         win32_main_window w{640, 480};
         d3d11_renderer renderer{w};
-        d3d11_simple_obj render_obj{renderer, make_array_view(obj.vertices), make_array_view(obj.indices)};
-        renderer.add_renderable(render_obj);
+        d3d11_simple_obj bunny_obj{renderer, make_array_view(bunny.vertices), make_array_view(bunny.indices)};
+        d3d11_simple_obj terrain_obj{renderer, make_array_view(terrain.vertices), make_array_view(terrain.indices)};
+        renderer.add_renderable(bunny_obj);
+        renderer.add_renderable(terrain_obj);
         w.on_paint([&renderer] {
             world_pos    pos{2, 2, 2};
             world_pos    tgt{0, 0, 0};
