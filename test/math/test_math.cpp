@@ -1,5 +1,5 @@
-#include "vec.h"
-#include "mat.h"
+#include <skirmish/math/vec.h>
+#include <skirmish/math/mat.h>
 #include <type_traits>
 #include <ostream>
 

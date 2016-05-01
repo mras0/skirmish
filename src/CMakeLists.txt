@@ -1,5 +1,2 @@
-add_library(skirmish_math vec.cpp vec.h mat.cpp mat.h)
-
-add_library(skirmish_util perlin.cpp perlin.h tga.cpp tga.h)
-
-add_library(skirmish_win32 win32_main_window.cpp win32_main_window.h d3d11_renderer.cpp d3d11_renderer.h)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+add_subdirectory(skirmish)

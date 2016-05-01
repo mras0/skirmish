@@ -8,12 +8,11 @@
 #include <stdint.h>
 #include <cassert>
 
-#include "win32_main_window.h"
-#include "d3d11_renderer.h"
-#include "vec.h"
-#include "mat.h"
-#include "perlin.h"
-#include "tga.h"
+#include <skirmish/win32_main_window.h>
+#include <skirmish/d3d11_renderer.h>
+#include <skirmish/perlin.h>
+#include <skirmish/tga.h>
+#include <skirmish/math/constants.h>
 
 #include <fstream>
 
@@ -151,7 +150,7 @@ auto calc_grid(int grid_size, float prescale, float grid_scale, float persistenc
 int main()
 {
     try {
-        const std::string data_dir = "../data/";
+        const std::string data_dir = "../../data/";
         auto bunny = load_obj(data_dir + "bunny.obj");
 
         const auto m = 10.0f * world_mat{

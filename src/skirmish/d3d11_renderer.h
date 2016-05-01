@@ -2,7 +2,7 @@
 #define SKIRMISH_D3D11_RENDERER_H
 
 #include "win32_main_window.h"
-#include "skirmish.h"
+#include <skirmish/math/types.h>
 
 namespace skirmish {
 
