@@ -20,11 +20,7 @@ std::ostream& operator<<(std::ostream& os, const skirmish::mat<Rows, Columns, T,
     return os;
 }
 
-#define CATCH_CONFIG_MAIN
-#pragma warning(push)
-#pragma warning(disable: 4702)
 #include "catch.hpp"
-#pragma warning(pop)
 
 using namespace skirmish;
 
