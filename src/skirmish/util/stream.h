@@ -15,6 +15,9 @@ public:
 
     uint8_t get();
 
+    uint16_t get_u16_le();
+    uint32_t get_u32_le();
+
 protected:
     explicit in_stream_base();
 

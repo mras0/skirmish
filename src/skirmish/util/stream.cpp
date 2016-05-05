@@ -27,6 +27,20 @@ uint8_t in_stream_base::get()
     return *cursor_++;
 }
 
+uint16_t in_stream_base::get_u16_le()
+{
+    uint16_t res = get();
+    res |= static_cast<uint16_t>(get()) << 8;
+    return res;
+}
+
+uint32_t in_stream_base::get_u32_le()
+{
+    uint32_t res = get_u16_le();
+    res |= static_cast<uint32_t>(get_u16_le()) << 16;
+    return res;
+}
+
 void in_stream_base::refill_zeros(in_stream_base& s)
 {
     static const uint8_t zeros[256];

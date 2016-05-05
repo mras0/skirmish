@@ -35,7 +35,7 @@ TEST_CASE("mem stream") {
     REQUIRE(s.get() == 0);
     REQUIRE(s.error() != std::error_code());
 }
-#include <fstream>
+
 TEST_CASE("input file stream") {
     in_file_stream invalid_file_name{"this_file_does_not_exist"};
     REQUIRE(invalid_file_name.error() != std::error_code());
@@ -60,4 +60,11 @@ TEST_CASE("input file stream") {
     REQUIRE(test_txt.error() == std::error_code());
     REQUIRE(test_txt.get() == 0);
     REQUIRE(test_txt.error() != std::error_code());
+}
+
+TEST_CASE("little endian") {
+    const uint8_t u16_fede[] = { 0xde, 0xfe };
+    REQUIRE(mem_stream(u16_fede).get_u16_le() == 0xfede);
+    const uint8_t u32_fede0abe[] = { 0xbe, 0x0a, 0xde, 0xfe };
+    REQUIRE(mem_stream(u32_fede0abe).get_u32_le() == 0xfede0abe);
 }
