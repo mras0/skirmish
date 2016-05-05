@@ -14,13 +14,18 @@ TEST_CASE("zero stream") {
     }
     REQUIRE(v == bytevec(10000));
     REQUIRE(s.error() == std::error_code());
+    s.seek(10000, seekdir::cur);
+    REQUIRE(s.get() == 0);
+    REQUIRE(s.error() == std::error_code());
 }
 
 TEST_CASE("mem stream") {
     const char buffer[] = "hello world";
     mem_stream s(buffer);
+    REQUIRE(s.tell() == 0);
     REQUIRE(s.get() == 'h');
     REQUIRE(s.get() == 'e');
+    REQUIRE(s.tell() == 2);
     REQUIRE(s.get() == 'l');
     REQUIRE(s.get() == 'l');
     REQUIRE(s.get() == 'o');
@@ -32,6 +37,17 @@ TEST_CASE("mem stream") {
     REQUIRE(s.get() == 'd');
     REQUIRE(s.get() == 0);
     REQUIRE(s.error() == std::error_code());
+    REQUIRE(s.tell() == sizeof(buffer));
+    REQUIRE(s.error() == std::error_code());
+    s.seek(-1, seekdir::cur);
+    REQUIRE(s.get() == 0);
+    REQUIRE(s.error() == std::error_code());
+    REQUIRE(s.tell() == sizeof(buffer));
+    s.seek(-1, seekdir::end);
+    REQUIRE(s.get() == 0);
+    REQUIRE(s.error() == std::error_code());
+    REQUIRE(s.tell() == sizeof(buffer));
+    // Read past end
     REQUIRE(s.get() == 0);
     REQUIRE(s.error() != std::error_code());
 }
@@ -41,9 +57,13 @@ TEST_CASE("input file stream") {
     REQUIRE(invalid_file_name.error() != std::error_code());
 
     const auto fname = (std::string{TEST_DATA_DIR} + "/" + "test.txt");
+    const uint64_t expected_file_size = 14;
     in_file_stream test_txt{fname.c_str()};
     REQUIRE(test_txt.error() == std::error_code());
+    REQUIRE(test_txt.stream_size() == expected_file_size);
+    REQUIRE(test_txt.tell() == 0);
     REQUIRE(test_txt.get() == 'L');
+    REQUIRE(test_txt.tell() == 1);
     REQUIRE(test_txt.get() == 'i');
     REQUIRE(test_txt.get() == 'n');
     REQUIRE(test_txt.get() == 'e');
@@ -57,9 +77,17 @@ TEST_CASE("input file stream") {
     REQUIRE(test_txt.get() == ' ');
     REQUIRE(test_txt.get() == '2');
     REQUIRE(test_txt.get() == '\n');
+    REQUIRE(test_txt.tell() == expected_file_size);
     REQUIRE(test_txt.error() == std::error_code());
     REQUIRE(test_txt.get() == 0);
     REQUIRE(test_txt.error() != std::error_code());
+    test_txt.seek(5, seekdir::beg);
+    REQUIRE(test_txt.error() == std::error_code());
+    REQUIRE(test_txt.tell() == 5);
+    REQUIRE(test_txt.get() == '1');
+    REQUIRE(test_txt.stream_size() == expected_file_size);
+    REQUIRE(test_txt.error() == std::error_code());
+    REQUIRE(test_txt.tell() == 6);
 }
 
 TEST_CASE("little endian") {

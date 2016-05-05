@@ -62,6 +62,20 @@ zero_stream::zero_stream()
     refill();
 }
 
+uint64_t zero_stream::do_stream_size() const
+{
+    return invalid_stream_size;
+}
+
+void zero_stream::do_seek(int64_t, seekdir)
+{
+}
+
+uint64_t zero_stream::do_tell() const
+{
+    return 0;
+}
+
 mem_stream::mem_stream(const void* data, size_t bytes)
 {
     start_  = reinterpret_cast<const uint8_t*>(data);
@@ -75,28 +89,98 @@ void mem_stream::refill_mem_stream(in_stream_base& stream)
     static_cast<mem_stream&>(stream).set_failed(std::make_error_code(std::errc::broken_pipe));
 }
 
+uint64_t mem_stream::do_stream_size() const
+{
+    return end_ - start_;
+}
+
+void mem_stream::do_seek(int64_t offset, seekdir way)
+{
+    uint64_t new_pos = 0;
+    switch (way) {
+    case seekdir::beg:
+        new_pos = offset;
+        break;
+    case seekdir::cur:
+        new_pos = tell() + offset;
+        break;
+    case seekdir::end:
+        new_pos = stream_size() + offset;
+        break;
+    }
+    if (new_pos >= 0 && new_pos <= stream_size()) {
+        cursor_ = start_ + new_pos;
+    }
+}
+
+uint64_t mem_stream::do_tell() const
+{
+    return cursor_ - start_;
+}
+
 class in_file_stream::impl
 {
 public:
-    explicit impl(const char* filename) : in_{filename, std::fstream::binary} {
+    explicit impl(const char* filename)
+        : file_pos_{0}
+        , file_size_{invalid_stream_size}
+        , in_{filename, std::fstream::binary} {
+        if (in_) {
+            in_.seekg(0, std::ios_base::end);
+            file_size_ = in_.tellg();
+            in_.seekg(0, std::ios_base::beg);
+        }
     }
 
     static constexpr int buffer_size = 4096;
     uint8_t       buffer_[buffer_size];
+    uint64_t      file_size_;
+    uint64_t      file_pos_;
     std::ifstream in_;
 };
 
 in_file_stream::in_file_stream(const char* filename) : impl_(new impl(filename))
 {
-    if (impl_->in_ && impl_->in_.is_open()) {
+    if (impl_->in_) {
         refill_ = &in_file_stream::refill_in_file_stream;
-        refill();
     } else {
         set_failed(std::make_error_code(std::errc::no_such_file_or_directory));
     }
 }
 
 in_file_stream::~in_file_stream() = default;
+
+uint64_t in_file_stream::do_stream_size() const
+{
+    return impl_->file_size_;
+}
+
+void in_file_stream::do_seek(int64_t offset, seekdir way)
+{
+    switch (way) {
+    case seekdir::beg:
+        impl_->file_pos_ = offset;
+        break;
+    case seekdir::cur:
+        impl_->file_pos_ += offset;
+        break;
+    case seekdir::end:
+        impl_->file_pos_ = impl_->file_size_ + offset;
+        break;
+    }
+    // TODO: We can optimize when/how the buffer invalidation happens, e.g. if we've seeked inside the current buffer
+    // invalidate buffer
+    start_ = cursor_ = end_;
+    // reset stream state
+    refill_ = &in_file_stream::refill_in_file_stream;
+    error_  = std::error_code{};
+    impl_->in_.clear();
+}
+
+uint64_t in_file_stream::do_tell() const
+{
+    return impl_->file_pos_ + cursor_ - start_;
+}
 
 void in_file_stream::refill_in_file_stream(in_stream_base& stream)
 {
@@ -108,8 +192,13 @@ void in_file_stream::refill_in_file_stream(in_stream_base& stream)
         return;
     }
 
+    impl.in_.seekg(impl.file_pos_, std::ios_base::beg);
     impl.in_.read(reinterpret_cast<char*>(impl.buffer_), impl.buffer_size);
     const auto byte_count = impl.in_.gcount();
+    if (!byte_count) {
+        s.set_failed(std::make_error_code(std::errc::io_error));
+        return;
+    }
     s.start_  = impl.buffer_;
     s.cursor_ = s.start_;
     s.end_    = s.start_ + byte_count;
