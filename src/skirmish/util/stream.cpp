@@ -23,6 +23,19 @@ void in_stream::refill()
     assert(cursor_ < end_);
 }
 
+array_view<uint8_t> in_stream::peek() const
+{
+    return make_array_view(cursor_, end_);
+}
+
+void in_stream::ensure_bytes_available()
+{
+    if (cursor_ >= end_) {
+        refill();
+    }
+    assert(peek().size() > 0);
+}
+
 void in_stream::read(void* dest, size_t count)
 {
     auto dst = static_cast<uint8_t*>(dest);
@@ -41,9 +54,7 @@ void in_stream::read(void* dest, size_t count)
 
 uint8_t in_stream::get()
 {
-    if (cursor_ >= end_) {
-        refill();
-    }
+    ensure_bytes_available();
     return *cursor_++;
 }
 
@@ -76,46 +87,46 @@ void in_stream::set_failed(std::error_code error)
     refill();
 }
 
-zero_stream::zero_stream()
+in_zero_stream::in_zero_stream()
 {
     refill_ = &in_stream::refill_zeros;
     refill();
 }
 
-uint64_t zero_stream::do_stream_size() const
+uint64_t in_zero_stream::do_stream_size() const
 {
     return invalid_stream_size;
 }
 
-void zero_stream::do_seek(int64_t, seekdir)
+void in_zero_stream::do_seek(int64_t, seekdir)
 {
 }
 
-uint64_t zero_stream::do_tell() const
+uint64_t in_zero_stream::do_tell() const
 {
     return 0;
 }
 
-mem_stream::mem_stream(const void* data, size_t bytes)
+in_mem_stream::in_mem_stream(const void* data, size_t bytes)
 {
     start_  = reinterpret_cast<const uint8_t*>(data);
     cursor_ = start_;
     end_    = start_ + bytes;
-    refill_ = &refill_mem_stream;
+    refill_ = &refill_in_mem_stream;
 }
 
-void mem_stream::refill_mem_stream(in_stream& stream)
+void in_mem_stream::refill_in_mem_stream(in_stream& stream)
 {
-    static_cast<mem_stream&>(stream).set_failed(std::make_error_code(std::errc::broken_pipe));
+    static_cast<in_mem_stream&>(stream).set_failed(std::make_error_code(std::errc::broken_pipe));
 }
 
-uint64_t mem_stream::do_stream_size() const
+uint64_t in_mem_stream::do_stream_size() const
 {
     assert(!error()); // If the stream has error we're using the zero stream, you probably don't want that
     return end_ - start_;
 }
 
-void mem_stream::do_seek(int64_t offset, seekdir way)
+void in_mem_stream::do_seek(int64_t offset, seekdir way)
 {
     assert(!error()); // If the stream has error we're seeking inside the zero stream, you probably don't want that
 
@@ -136,7 +147,7 @@ void mem_stream::do_seek(int64_t offset, seekdir way)
     }
 }
 
-uint64_t mem_stream::do_tell() const
+uint64_t in_mem_stream::do_tell() const
 {
     assert(!error()); // If the stream has error we're using the zero stream, you probably don't want that
     return cursor_ - start_;
@@ -181,24 +192,27 @@ uint64_t in_file_stream::do_stream_size() const
 
 void in_file_stream::do_seek(int64_t offset, seekdir way)
 {
+    assert(!error());
+    uint64_t new_file_pos = 0;
     switch (way) {
     case seekdir::beg:
-        impl_->file_pos_ = offset;
+        new_file_pos = offset;
         break;
     case seekdir::cur:
-        impl_->file_pos_ += offset;
+        new_file_pos = do_tell() + offset;
         break;
     case seekdir::end:
-        impl_->file_pos_ = impl_->file_size_ + offset;
+        new_file_pos = impl_->file_size_ + offset;
         break;
     }
-    // TODO: We can optimize when/how the buffer invalidation happens, e.g. if we've seeked inside the current buffer
-    // invalidate buffer
-    start_ = cursor_ = end_;
-    // reset stream state
-    refill_ = &in_file_stream::refill_in_file_stream;
-    error_  = std::error_code{};
-    impl_->in_.clear();
+    if (new_file_pos <= impl_->file_size_) {
+        // TODO: We can optimize when/how the buffer invalidation happens, e.g. if we've seeked inside the current buffer
+        // invalidate buffer
+        start_ = cursor_ = end_;
+        impl_->file_pos_ = new_file_pos;
+    } else {
+        set_failed(std::make_error_code(std::errc::invalid_seek));
+    }
 }
 
 uint64_t in_file_stream::do_tell() const
@@ -211,13 +225,15 @@ void in_file_stream::refill_in_file_stream(in_stream& stream)
     auto& s    = static_cast<in_file_stream&>(stream);
     auto& impl = *s.impl_;
 
-    if (!impl.in_) {
+    const uint64_t file_remaining = impl.file_size_ - s.do_tell();
+
+    if (!impl.in_ || !file_remaining) {
         s.set_failed(std::make_error_code(std::errc::io_error));
         return;
     }
 
     impl.in_.seekg(impl.file_pos_, std::ios_base::beg);
-    impl.in_.read(reinterpret_cast<char*>(impl.buffer_), impl.buffer_size);
+    impl.in_.read(reinterpret_cast<char*>(impl.buffer_), std::min(file_remaining, static_cast<uint64_t>(impl.buffer_size)));
     const auto byte_count = impl.in_.gcount();
     if (!byte_count) {
         s.set_failed(std::make_error_code(std::errc::io_error));

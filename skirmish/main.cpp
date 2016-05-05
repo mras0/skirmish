@@ -195,8 +195,8 @@ int main()
         std::map<key, bool> key_down;        
 
         d3d11_renderer renderer{w};
-        d3d11_simple_obj bunny_obj{renderer, make_array_view(bunny.vertices), make_array_view(bunny.indices)};
-        d3d11_simple_obj terrain_obj{renderer, make_array_view(vertices), make_array_view(indices)};
+        d3d11_simple_obj bunny_obj{renderer, util::make_array_view(bunny.vertices), util::make_array_view(bunny.indices)};
+        d3d11_simple_obj terrain_obj{renderer, util::make_array_view(vertices), util::make_array_view(indices)};
         renderer.add_renderable(bunny_obj);
         renderer.add_renderable(terrain_obj);
 
@@ -227,7 +227,7 @@ int main()
 
             if (needs_to_recalc_grid) {
                 recalc_grid();
-                terrain_obj.update_vertices(make_array_view(vertices));
+                terrain_obj.update_vertices(util::make_array_view(vertices));
             }
         });
         w.on_key_up([&](key k) {

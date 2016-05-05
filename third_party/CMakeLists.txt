@@ -4,4 +4,5 @@ if (MSVC)
     add_definitions(/wd4127) # warning C4127: conditional expression is constant
 endif()
 
+set(SKIP_INSTALL_ALL TRUE)
 add_subdirectory(zlib)

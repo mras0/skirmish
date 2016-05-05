@@ -166,7 +166,7 @@ public:
 
 class d3d11_simple_obj::impl {
 public:
-    explicit impl(d3d11_renderer& renderer, const array_view<world_pos>& vertices, const array_view<uint16_t>& indices) {
+    explicit impl(d3d11_renderer& renderer, const util::array_view<world_pos>& vertices, const util::array_view<uint16_t>& indices) {
         auto device = renderer.create_context().device;
         ComPtr<ID3DBlob> vs_blob;
         create_shader(device, shader_source, "VS", vs.GetAddressOf(), &vs_blob);
@@ -217,7 +217,7 @@ public:
         immediate_context->DrawIndexed(index_count, 0, 0);
     }
 
-    void update_vertices(const array_view<world_pos>& vertices) {
+    void update_vertices(const util::array_view<world_pos>& vertices) {
         immediate_context->UpdateSubresource(vertex_buffer.Get(), 0, nullptr, vertices.data(), 0, 0);
     }
 
@@ -231,12 +231,12 @@ private:
     UINT                        index_count;
 };
 
-d3d11_simple_obj::d3d11_simple_obj(d3d11_renderer& renderer, const array_view<world_pos>& vertices, const array_view<uint16_t>& indices) : impl_(new impl{renderer, vertices, indices}) {
+d3d11_simple_obj::d3d11_simple_obj(d3d11_renderer& renderer, const util::array_view<world_pos>& vertices, const util::array_view<uint16_t>& indices) : impl_(new impl{renderer, vertices, indices}) {
 }
 
 d3d11_simple_obj::~d3d11_simple_obj() = default;
 
-void d3d11_simple_obj::update_vertices(const array_view<world_pos>& vertices) {
+void d3d11_simple_obj::update_vertices(const util::array_view<world_pos>& vertices) {
     impl_->update_vertices(vertices);
 }
 

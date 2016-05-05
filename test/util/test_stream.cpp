@@ -7,7 +7,7 @@ using namespace skirmish::util;
 using bytevec = std::vector<std::uint8_t>;
 
 TEST_CASE("zero stream") {
-    zero_stream s;
+    in_zero_stream s;
     bytevec v;
     for (int i = 0; i < 10000; ++i) {
         v.push_back(s.get());
@@ -27,7 +27,10 @@ TEST_CASE("zero stream") {
 
 TEST_CASE("mem stream") {
     const char buffer[] = "hello world";
-    mem_stream s(buffer);
+    in_mem_stream s(buffer);
+    REQUIRE(s.error() == std::error_code());
+    REQUIRE(std::string(reinterpret_cast<const char*>(s.peek().begin())) == "hello world");
+    REQUIRE(s.error() == std::error_code());
     REQUIRE(s.tell() == 0);
     REQUIRE(s.get() == 'h');
     REQUIRE(s.get() == 'e');
@@ -40,6 +43,7 @@ TEST_CASE("mem stream") {
     REQUIRE(s.get() == 'o');
     REQUIRE(s.get() == 'r');
     REQUIRE(s.get() == 'l');
+    REQUIRE(std::string(reinterpret_cast<const char*>(s.peek().begin())) == "d");
     REQUIRE(s.get() == 'd');
     REQUIRE(s.get() == 0);
     REQUIRE(s.error() == std::error_code());
@@ -56,6 +60,10 @@ TEST_CASE("mem stream") {
     // Read past end
     REQUIRE(s.get() == 0);
     REQUIRE(s.error() != std::error_code());
+
+    in_mem_stream s2(make_array_view(buffer));
+    REQUIRE(s2.peek().data() == reinterpret_cast<const uint8_t*>(&buffer[0]));
+    REQUIRE(s2.peek().size() == sizeof(buffer));
 }
 
 TEST_CASE("input file stream") {
@@ -82,11 +90,10 @@ TEST_CASE("input file stream") {
     REQUIRE(test_txt.get() == 'e');
     REQUIRE(test_txt.get() == ' ');
     REQUIRE(test_txt.get() == '2');
+    REQUIRE(test_txt.tell() == 13);
     REQUIRE(test_txt.get() == '\n');
     REQUIRE(test_txt.tell() == expected_file_size);
     REQUIRE(test_txt.error() == std::error_code());
-    REQUIRE(test_txt.get() == 0);
-    REQUIRE(test_txt.error() != std::error_code());
     test_txt.seek(5, seekdir::beg);
     REQUIRE(test_txt.error() == std::error_code());
     REQUIRE(test_txt.tell() == 5);
@@ -98,11 +105,18 @@ TEST_CASE("input file stream") {
     char buffer[6];
     test_txt.read(buffer, sizeof(buffer));    
     REQUIRE(std::string(buffer, buffer+sizeof(buffer)) == "Line 1");
+    test_txt.seek(7, seekdir::cur);
+    REQUIRE(test_txt.tell() == 13);
+    REQUIRE(test_txt.get() == '\n');
+    REQUIRE(test_txt.tell() == expected_file_size);
+    REQUIRE(test_txt.error() == std::error_code());
+    REQUIRE(test_txt.get() == 0);
+    REQUIRE(test_txt.error() != std::error_code());
 }
 
 TEST_CASE("little endian") {
     const uint8_t u16_fede[] = { 0xde, 0xfe };
-    REQUIRE(mem_stream(u16_fede).get_u16_le() == 0xfede);
+    REQUIRE(in_mem_stream(u16_fede).get_u16_le() == 0xfede);
     const uint8_t u32_fede0abe[] = { 0xbe, 0x0a, 0xde, 0xfe };
-    REQUIRE(mem_stream(u32_fede0abe).get_u32_le() == 0xfede0abe);
+    REQUIRE(in_mem_stream(u32_fede0abe).get_u32_le() == 0xfede0abe);
 }
