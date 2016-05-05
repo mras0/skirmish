@@ -2,7 +2,6 @@
 #include <skirmish/util/zip_internals.h>
 #include "catch.hpp"
 #include <vector>
-#include <iostream>
 #include <cassert>
 
 using namespace skirmish::zip;
@@ -97,4 +96,46 @@ TEST_CASE("test.zip") {
     std::vector<uint8_t> file_data(lfh.compressed_size);
     test_zip.read(&file_data[0], file_data.size());
     REQUIRE(file_data == (std::vector<uint8_t>{0xf3, 0xc9, 0xcc, 0x4b, 0x55, 0x30, 0xe4, 0xf2, 0x01, 0x51, 0x46, 0x5c, 0x00}));
+}
+
+TEST_CASE("find_end_of_central_directory_record doesn't seek too far") {
+    std::vector<uint8_t> zeros(0x20000);
+    in_mem_stream zip{make_array_view(zeros)};
+    end_of_central_directory_record dir_end;
+    REQUIRE(find_end_of_central_directory_record(zip, dir_end) == invalid_file_pos);
+    REQUIRE(zip.tell() >= 0x10000);
+}
+
+TEST_CASE("test_data.zip") {
+    in_file_stream zip{(std::string{TEST_DATA_DIR} + "/" + "test_data.zip").c_str()};
+
+    end_of_central_directory_record dir_end;
+    REQUIRE(find_end_of_central_directory_record(zip, dir_end) != invalid_file_pos);
+    REQUIRE(dir_end.disk_number == 0);
+    REQUIRE(dir_end.central_disk == 0);
+    REQUIRE(dir_end.central_directory_size_bytes >= central_directory_file_header::min_size_bytes);
+
+    std::vector<std::string> filenames;
+    zip.seek(dir_end.central_directory_central_offset, seekdir::beg);
+    while (zip.tell() < dir_end.central_directory_central_offset + dir_end.central_directory_size_bytes) {
+        central_directory_file_header cdfh;
+        read(zip, cdfh);
+
+        REQUIRE(cdfh.signature == central_directory_file_header::signature_magic);
+        REQUIRE((cdfh.version>>8) == 0);
+        REQUIRE(cdfh.min_version <= 20);
+        auto supported_compression_method = [](compression_methods compression_method) { return compression_method == compression_methods::deflated || compression_method == compression_methods::stored; };
+        REQUIRE(supported_compression_method(cdfh.compression_method));
+        REQUIRE(cdfh.disk == 0);
+ 
+        std::string filename(cdfh.filename_length, '\0');
+        zip.read(&filename[0], filename.size());
+        zip.seek(cdfh.extra_field_length, seekdir::cur);
+        zip.seek(cdfh.file_comment_length, seekdir::cur);
+        const bool is_dir = (cdfh.external_file_attributes & 0x10) != 0;
+        if (!is_dir) {
+            filenames.push_back(filename);
+        }
+    }
+    REQUIRE(filenames == (std::vector<std::string>{"test_data/empty.zip", "test_data/test.txt", "test_data/test.zip"}));
 }

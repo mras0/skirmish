@@ -87,7 +87,7 @@ uint64_t find_end_of_central_directory_record(util::in_stream& in, end_of_centra
         return invalid_file_pos;
     }
 
-    for (uint64_t pos = file_size - end_of_central_directory_record::min_size_bytes + 1; !in.error() && pos--;) {
+    for (uint64_t pos = file_size - end_of_central_directory_record::min_size_bytes + 1; !in.error() && pos-- && pos + 0xffff >= file_size;) {
         in.seek(pos, util::seekdir::beg);
         read(in, r);
         assert(in.tell() == pos + end_of_central_directory_record::min_size_bytes);
