@@ -14,6 +14,12 @@ TEST_CASE("zero stream") {
     }
     REQUIRE(v == bytevec(10000));
     REQUIRE(s.error() == std::error_code());
+    
+    bytevec v2(10, 0xff);
+    s.read(&v2[0], v2.size());
+    REQUIRE(v2 == bytevec(10));
+    REQUIRE(s.error() == std::error_code());
+
     s.seek(10000, seekdir::cur);
     REQUIRE(s.get() == 0);
     REQUIRE(s.error() == std::error_code());
@@ -88,6 +94,10 @@ TEST_CASE("input file stream") {
     REQUIRE(test_txt.stream_size() == expected_file_size);
     REQUIRE(test_txt.error() == std::error_code());
     REQUIRE(test_txt.tell() == 6);
+    test_txt.seek(0, seekdir::beg);
+    char buffer[6];
+    test_txt.read(buffer, sizeof(buffer));    
+    REQUIRE(std::string(buffer, buffer+sizeof(buffer)) == "Line 1");
 }
 
 TEST_CASE("little endian") {

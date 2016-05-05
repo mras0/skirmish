@@ -2,24 +2,44 @@
 #include <fstream>
 #include <stdexcept>
 #include <algorithm>
+#include <cassert>
 
 namespace skirmish { namespace util {
 
-in_stream_base::in_stream_base()
+in_stream::in_stream()
     : start_(nullptr)
     , cursor_(nullptr)
     , end_(nullptr)
     , error_()
-    , refill_(&in_stream_base::refill_zeros)
+    , refill_(&in_stream::refill_zeros)
 {
 }
 
-void in_stream_base::refill()
+void in_stream::refill()
 {
     refill_(*this);
+    assert(start_ < end_);
+    assert(cursor_ >= start_);
+    assert(cursor_ < end_);
 }
 
-uint8_t in_stream_base::get()
+void in_stream::read(void* dest, size_t count)
+{
+    auto dst = static_cast<uint8_t*>(dest);
+    while (count) {
+        if (cursor_ >= end_) {
+            refill();
+        }
+        const auto now = std::min(count, static_cast<size_t>(end_ - cursor_));
+        std::memcpy(dst, cursor_, now);
+        dst     += now;
+        cursor_ += now;
+        count   -= now;
+        assert(cursor_ <= end_);
+    }
+}
+
+uint8_t in_stream::get()
 {
     if (cursor_ >= end_) {
         refill();
@@ -27,21 +47,21 @@ uint8_t in_stream_base::get()
     return *cursor_++;
 }
 
-uint16_t in_stream_base::get_u16_le()
+uint16_t in_stream::get_u16_le()
 {
     uint16_t res = get();
     res |= static_cast<uint16_t>(get()) << 8;
     return res;
 }
 
-uint32_t in_stream_base::get_u32_le()
+uint32_t in_stream::get_u32_le()
 {
     uint32_t res = get_u16_le();
     res |= static_cast<uint32_t>(get_u16_le()) << 16;
     return res;
 }
 
-void in_stream_base::refill_zeros(in_stream_base& s)
+void in_stream::refill_zeros(in_stream& s)
 {
     static const uint8_t zeros[256];
     s.start_  = zeros;
@@ -49,16 +69,16 @@ void in_stream_base::refill_zeros(in_stream_base& s)
     s.end_    = zeros + sizeof(zeros);
 }
 
-void in_stream_base::set_failed(std::error_code error)
+void in_stream::set_failed(std::error_code error)
 {
     error_  = error;
-    refill_ = &in_stream_base::refill_zeros;
+    refill_ = &in_stream::refill_zeros;
     refill();
 }
 
 zero_stream::zero_stream()
 {
-    refill_ = &in_stream_base::refill_zeros;
+    refill_ = &in_stream::refill_zeros;
     refill();
 }
 
@@ -84,18 +104,21 @@ mem_stream::mem_stream(const void* data, size_t bytes)
     refill_ = &refill_mem_stream;
 }
 
-void mem_stream::refill_mem_stream(in_stream_base& stream)
+void mem_stream::refill_mem_stream(in_stream& stream)
 {
     static_cast<mem_stream&>(stream).set_failed(std::make_error_code(std::errc::broken_pipe));
 }
 
 uint64_t mem_stream::do_stream_size() const
 {
+    assert(!error()); // If the stream has error we're using the zero stream, you probably don't want that
     return end_ - start_;
 }
 
 void mem_stream::do_seek(int64_t offset, seekdir way)
 {
+    assert(!error()); // If the stream has error we're seeking inside the zero stream, you probably don't want that
+
     uint64_t new_pos = 0;
     switch (way) {
     case seekdir::beg:
@@ -115,6 +138,7 @@ void mem_stream::do_seek(int64_t offset, seekdir way)
 
 uint64_t mem_stream::do_tell() const
 {
+    assert(!error()); // If the stream has error we're using the zero stream, you probably don't want that
     return cursor_ - start_;
 }
 
@@ -182,7 +206,7 @@ uint64_t in_file_stream::do_tell() const
     return impl_->file_pos_ + cursor_ - start_;
 }
 
-void in_file_stream::refill_in_file_stream(in_stream_base& stream)
+void in_file_stream::refill_in_file_stream(in_stream& stream)
 {
     auto& s    = static_cast<in_file_stream&>(stream);
     auto& impl = *s.impl_;
