@@ -60,10 +60,11 @@ public:
 protected:
     explicit in_stream();
 
+    using refill_function_type = array_view<uint8_t> (in_stream::*)();
     // Must return at least one more byte of data, may call set_failed
-    array_view<uint8_t> (*refill_)(in_stream&);
+    refill_function_type refill_;
 
-    static array_view<uint8_t> refill_zeros(in_stream& s);
+    array_view<uint8_t> refill_zeros();
 
     array_view<uint8_t> set_failed(std::error_code error);
 
@@ -110,7 +111,7 @@ public:
     }
 
 private:
-    static array_view<uint8_t> refill_in_mem_stream(in_stream& s);
+    array_view<uint8_t> refill_in_mem_stream();
 
     virtual uint64_t do_stream_size() const override;
     virtual void do_seek(int64_t offset, seekdir way) override;
@@ -126,7 +127,7 @@ private:
     class impl;
     std::unique_ptr<impl> impl_;
 
-    static array_view<uint8_t> refill_in_file_stream(in_stream& s);
+    array_view<uint8_t> refill_in_file_stream();
 
     virtual uint64_t do_stream_size() const override;
     virtual void do_seek(int64_t offset, seekdir way) override;

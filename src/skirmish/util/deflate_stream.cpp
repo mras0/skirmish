@@ -14,15 +14,14 @@ private:
 
 in_deflate_stream::in_deflate_stream(in_stream& inner_stream) : impl_(new impl{inner_stream})
 {
-    refill_ = &in_deflate_stream::refill_in_deflate_stream;
+    refill_ = static_cast<refill_function_type>(&in_deflate_stream::refill_in_deflate_stream);
 }
 
 in_deflate_stream::~in_deflate_stream() = default;
 
-array_view<uint8_t> in_deflate_stream::refill_in_deflate_stream(in_stream& s)
+array_view<uint8_t> in_deflate_stream::refill_in_deflate_stream()
 {
     assert(false);
-    (void)s;
     return array_view<uint8_t>{nullptr, 0};
 }
 

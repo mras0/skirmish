@@ -41,7 +41,7 @@ void in_stream::set_cursor(const uint8_t* new_pos)
 void in_stream::ensure_bytes_available()
 {
     if (cursor_ >= end_) {
-        set_buffer(refill_(*this));
+        set_buffer((this->*refill_)());
     }
     assert(peek().size() > 0);
 }
@@ -80,7 +80,7 @@ uint32_t in_stream::get_u32_le()
     return res;
 }
 
-array_view<uint8_t> in_stream::refill_zeros(in_stream&)
+array_view<uint8_t> in_stream::refill_zeros()
 {
     static const uint8_t zeros[256];
     return make_array_view(zeros);
@@ -90,12 +90,11 @@ array_view<uint8_t> in_stream::set_failed(std::error_code error)
 {
     error_  = error;
     refill_ = &in_stream::refill_zeros;
-    return refill_zeros(*this);
+    return refill_zeros();
 }
 
 in_zero_stream::in_zero_stream()
 {
-    refill_ = &in_stream::refill_zeros;
 }
 
 uint64_t in_zero_stream::do_stream_size() const
@@ -115,12 +114,12 @@ uint64_t in_zero_stream::do_tell() const
 in_mem_stream::in_mem_stream(const void* data, size_t bytes)
 {
     set_buffer(make_array_view(static_cast<const uint8_t*>(data), bytes));
-    refill_ = &refill_in_mem_stream;
+    refill_ = static_cast<refill_function_type>(&in_mem_stream::refill_in_mem_stream);
 }
 
-array_view<uint8_t> in_mem_stream::refill_in_mem_stream(in_stream& stream)
+array_view<uint8_t> in_mem_stream::refill_in_mem_stream()
 {
-    return static_cast<in_mem_stream&>(stream).set_failed(std::make_error_code(std::errc::broken_pipe));
+    return set_failed(std::make_error_code(std::errc::broken_pipe));
 }
 
 uint64_t in_mem_stream::do_stream_size() const
@@ -180,7 +179,7 @@ public:
 in_file_stream::in_file_stream(const char* filename) : impl_(new impl(filename))
 {
     if (impl_->in_) {
-        refill_ = &in_file_stream::refill_in_file_stream;
+        refill_ = static_cast<refill_function_type>(&in_file_stream::refill_in_file_stream);
     } else {
         set_failed(std::make_error_code(std::errc::no_such_file_or_directory));
     }
@@ -223,24 +222,21 @@ uint64_t in_file_stream::do_tell() const
     return impl_->file_pos_ + peek().begin() - buffer().begin();
 }
 
-array_view<uint8_t> in_file_stream::refill_in_file_stream(in_stream& stream)
+array_view<uint8_t> in_file_stream::refill_in_file_stream()
 {
-    auto& s    = static_cast<in_file_stream&>(stream);
-    auto& impl = *s.impl_;
+    const uint64_t file_remaining = impl_->file_size_ - tell();
 
-    const uint64_t file_remaining = impl.file_size_ - s.do_tell();
-
-    if (!impl.in_ || !file_remaining) {
-        return s.set_failed(std::make_error_code(std::errc::io_error));
+    if (!impl_->in_ || !file_remaining) {
+        return set_failed(std::make_error_code(std::errc::io_error));
     }
 
-    impl.in_.seekg(impl.file_pos_, std::ios_base::beg);
-    impl.in_.read(reinterpret_cast<char*>(impl.buffer_), std::min(file_remaining, static_cast<uint64_t>(impl.buffer_size)));
-    const auto byte_count = impl.in_.gcount();
+    impl_->in_.seekg(impl_->file_pos_, std::ios_base::beg);
+    impl_->in_.read(reinterpret_cast<char*>(impl_->buffer_), std::min(file_remaining, static_cast<uint64_t>(impl_->buffer_size)));
+    const auto byte_count = impl_->in_.gcount();
     if (!byte_count) {
-        return s.set_failed(std::make_error_code(std::errc::io_error));
+        return set_failed(std::make_error_code(std::errc::io_error));
     }
-    return make_array_view(impl.buffer_, byte_count);
+    return make_array_view(impl_->buffer_, byte_count);
 }
 
 } } // namespace skirmish::util
