@@ -60,26 +60,29 @@ public:
 protected:
     explicit in_stream();
 
+    // Must return at least one more byte of data, may call set_failed
+    array_view<uint8_t> (*refill_)(in_stream&);
+
+    static array_view<uint8_t> refill_zeros(in_stream& s);
+
+    array_view<uint8_t> set_failed(std::error_code error);
+
+    array_view<uint8_t> buffer() const;
+    void set_buffer(const array_view<uint8_t>& av);
+    void set_cursor(const uint8_t* new_pos);
+
+private:
     // start_ <= cursor_ <= end_
     const uint8_t*  start_;
-    const uint8_t*  end_;
     const uint8_t*  cursor_;
+    const uint8_t*  end_;
 
-    // Must return at least one more byte of data, may set error code
-    void (*refill_)(in_stream&);
-
-    static void refill_zeros(in_stream& s);
-
-    void refill();
-    void set_failed(std::error_code error);
+    // starts out default constructed, errors are sticky
+    std::error_code error_;
 
     virtual uint64_t do_stream_size() const = 0;
     virtual void do_seek(int64_t offset, seekdir way) = 0;
     virtual uint64_t do_tell() const = 0;
-
-private:
-    // starts out default constructed, errors are sticky
-    std::error_code error_;
 };
 
 class in_zero_stream : public in_stream {
@@ -107,7 +110,7 @@ public:
     }
 
 private:
-    static void refill_in_mem_stream(in_stream& s);
+    static array_view<uint8_t> refill_in_mem_stream(in_stream& s);
 
     virtual uint64_t do_stream_size() const override;
     virtual void do_seek(int64_t offset, seekdir way) override;
@@ -123,7 +126,7 @@ private:
     class impl;
     std::unique_ptr<impl> impl_;
 
-    static void refill_in_file_stream(in_stream& s);
+    static array_view<uint8_t> refill_in_file_stream(in_stream& s);
 
     virtual uint64_t do_stream_size() const override;
     virtual void do_seek(int64_t offset, seekdir way) override;

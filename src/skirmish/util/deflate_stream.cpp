@@ -19,10 +19,11 @@ in_deflate_stream::in_deflate_stream(in_stream& inner_stream) : impl_(new impl{i
 
 in_deflate_stream::~in_deflate_stream() = default;
 
-void in_deflate_stream::refill_in_deflate_stream(in_stream& s)
+array_view<uint8_t> in_deflate_stream::refill_in_deflate_stream(in_stream& s)
 {
     assert(false);
     (void)s;
+    return array_view<uint8_t>{nullptr, 0};
 }
 
 uint64_t in_deflate_stream::do_stream_size() const

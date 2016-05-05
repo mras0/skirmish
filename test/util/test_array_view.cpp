@@ -27,4 +27,9 @@ TEST_CASE("array_view") {
     REQUIRE(av[3] == 'h');
     REQUIRE(make_array_view(&arr[0], 4) == av);
     REQUIRE(make_array_view(&arr[0], &arr[4]) == av);
+
+    array_view<char> null_av{};
+    REQUIRE(null_av.begin() == nullptr);
+    REQUIRE(null_av.end() == nullptr);
+    REQUIRE(null_av.size() == 0);
 }

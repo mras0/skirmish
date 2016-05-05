@@ -14,7 +14,7 @@ private:
     class impl;
     std::unique_ptr<impl> impl_;
 
-    static void refill_in_deflate_stream(in_stream& s);
+    static array_view<uint8_t> refill_in_deflate_stream(in_stream& s);
 
     virtual uint64_t do_stream_size() const override;
     virtual void do_seek(int64_t offset, seekdir way) override;

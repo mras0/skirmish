@@ -15,23 +15,33 @@ in_stream::in_stream()
 {
 }
 
-void in_stream::refill()
-{
-    refill_(*this);
-    assert(start_ < end_);
-    assert(cursor_ >= start_);
-    assert(cursor_ < end_);
-}
-
 array_view<uint8_t> in_stream::peek() const
 {
     return make_array_view(cursor_, end_);
 }
 
+array_view<uint8_t> in_stream::buffer() const
+{
+    return make_array_view(start_, end_);
+}
+
+void in_stream::set_buffer(const array_view<uint8_t>& av)
+{
+    start_ = cursor_ = av.begin();
+    end_ = av.end();
+}
+
+void in_stream::set_cursor(const uint8_t* new_pos)
+{
+    assert(reinterpret_cast<uintptr_t>(new_pos) >= reinterpret_cast<uintptr_t>(start_));
+    assert(reinterpret_cast<uintptr_t>(new_pos) <= reinterpret_cast<uintptr_t>(end_));
+    cursor_ = new_pos;
+}
+
 void in_stream::ensure_bytes_available()
 {
     if (cursor_ >= end_) {
-        refill();
+        set_buffer(refill_(*this));
     }
     assert(peek().size() > 0);
 }
@@ -40,9 +50,7 @@ void in_stream::read(void* dest, size_t count)
 {
     auto dst = static_cast<uint8_t*>(dest);
     while (count) {
-        if (cursor_ >= end_) {
-            refill();
-        }
+        ensure_bytes_available();
         const auto now = std::min(count, static_cast<size_t>(end_ - cursor_));
         std::memcpy(dst, cursor_, now);
         dst     += now;
@@ -72,25 +80,22 @@ uint32_t in_stream::get_u32_le()
     return res;
 }
 
-void in_stream::refill_zeros(in_stream& s)
+array_view<uint8_t> in_stream::refill_zeros(in_stream&)
 {
     static const uint8_t zeros[256];
-    s.start_  = zeros;
-    s.cursor_ = s.start_;
-    s.end_    = zeros + sizeof(zeros);
+    return make_array_view(zeros);
 }
 
-void in_stream::set_failed(std::error_code error)
+array_view<uint8_t> in_stream::set_failed(std::error_code error)
 {
     error_  = error;
     refill_ = &in_stream::refill_zeros;
-    refill();
+    return refill_zeros(*this);
 }
 
 in_zero_stream::in_zero_stream()
 {
     refill_ = &in_stream::refill_zeros;
-    refill();
 }
 
 uint64_t in_zero_stream::do_stream_size() const
@@ -109,21 +114,19 @@ uint64_t in_zero_stream::do_tell() const
 
 in_mem_stream::in_mem_stream(const void* data, size_t bytes)
 {
-    start_  = reinterpret_cast<const uint8_t*>(data);
-    cursor_ = start_;
-    end_    = start_ + bytes;
+    set_buffer(make_array_view(static_cast<const uint8_t*>(data), bytes));
     refill_ = &refill_in_mem_stream;
 }
 
-void in_mem_stream::refill_in_mem_stream(in_stream& stream)
+array_view<uint8_t> in_mem_stream::refill_in_mem_stream(in_stream& stream)
 {
-    static_cast<in_mem_stream&>(stream).set_failed(std::make_error_code(std::errc::broken_pipe));
+    return static_cast<in_mem_stream&>(stream).set_failed(std::make_error_code(std::errc::broken_pipe));
 }
 
 uint64_t in_mem_stream::do_stream_size() const
 {
     assert(!error()); // If the stream has error we're using the zero stream, you probably don't want that
-    return end_ - start_;
+    return buffer().size();
 }
 
 void in_mem_stream::do_seek(int64_t offset, seekdir way)
@@ -143,14 +146,14 @@ void in_mem_stream::do_seek(int64_t offset, seekdir way)
         break;
     }
     if (new_pos >= 0 && new_pos <= stream_size()) {
-        cursor_ = start_ + new_pos;
+        set_cursor(buffer().begin() + new_pos);
     }
 }
 
 uint64_t in_mem_stream::do_tell() const
 {
     assert(!error()); // If the stream has error we're using the zero stream, you probably don't want that
-    return cursor_ - start_;
+    return peek().begin() - buffer().begin();
 }
 
 class in_file_stream::impl
@@ -199,7 +202,7 @@ void in_file_stream::do_seek(int64_t offset, seekdir way)
         new_file_pos = offset;
         break;
     case seekdir::cur:
-        new_file_pos = do_tell() + offset;
+        new_file_pos = tell() + offset;
         break;
     case seekdir::end:
         new_file_pos = impl_->file_size_ + offset;
@@ -208,7 +211,7 @@ void in_file_stream::do_seek(int64_t offset, seekdir way)
     if (new_file_pos <= impl_->file_size_) {
         // TODO: We can optimize when/how the buffer invalidation happens, e.g. if we've seeked inside the current buffer
         // invalidate buffer
-        start_ = cursor_ = end_;
+        set_buffer(array_view<uint8_t>{});
         impl_->file_pos_ = new_file_pos;
     } else {
         set_failed(std::make_error_code(std::errc::invalid_seek));
@@ -217,10 +220,10 @@ void in_file_stream::do_seek(int64_t offset, seekdir way)
 
 uint64_t in_file_stream::do_tell() const
 {
-    return impl_->file_pos_ + cursor_ - start_;
+    return impl_->file_pos_ + peek().begin() - buffer().begin();
 }
 
-void in_file_stream::refill_in_file_stream(in_stream& stream)
+array_view<uint8_t> in_file_stream::refill_in_file_stream(in_stream& stream)
 {
     auto& s    = static_cast<in_file_stream&>(stream);
     auto& impl = *s.impl_;
@@ -228,20 +231,16 @@ void in_file_stream::refill_in_file_stream(in_stream& stream)
     const uint64_t file_remaining = impl.file_size_ - s.do_tell();
 
     if (!impl.in_ || !file_remaining) {
-        s.set_failed(std::make_error_code(std::errc::io_error));
-        return;
+        return s.set_failed(std::make_error_code(std::errc::io_error));
     }
 
     impl.in_.seekg(impl.file_pos_, std::ios_base::beg);
     impl.in_.read(reinterpret_cast<char*>(impl.buffer_), std::min(file_remaining, static_cast<uint64_t>(impl.buffer_size)));
     const auto byte_count = impl.in_.gcount();
     if (!byte_count) {
-        s.set_failed(std::make_error_code(std::errc::io_error));
-        return;
+        return s.set_failed(std::make_error_code(std::errc::io_error));
     }
-    s.start_  = impl.buffer_;
-    s.cursor_ = s.start_;
-    s.end_    = s.start_ + byte_count;
+    return make_array_view(impl.buffer_, byte_count);
 }
 
 } } // namespace skirmish::util
