@@ -1,0 +1,4 @@
+#ifndef SKIRMISH_UTIL_ZIP_H
+#define SKIRMISH_UTIL_ZIP_H
+
+#endif
