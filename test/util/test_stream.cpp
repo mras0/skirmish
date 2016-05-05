@@ -35,3 +35,29 @@ TEST_CASE("mem stream") {
     REQUIRE(s.get() == 0);
     REQUIRE(s.error() != std::error_code());
 }
+#include <fstream>
+TEST_CASE("input file stream") {
+    in_file_stream invalid_file_name{"this_file_does_not_exist"};
+    REQUIRE(invalid_file_name.error() != std::error_code());
+
+    const auto fname = (std::string{TEST_DATA_DIR} + "/" + "test.txt");
+    in_file_stream test_txt{fname.c_str()};
+    REQUIRE(test_txt.error() == std::error_code());
+    REQUIRE(test_txt.get() == 'L');
+    REQUIRE(test_txt.get() == 'i');
+    REQUIRE(test_txt.get() == 'n');
+    REQUIRE(test_txt.get() == 'e');
+    REQUIRE(test_txt.get() == ' ');
+    REQUIRE(test_txt.get() == '1');
+    REQUIRE(test_txt.get() == '\n');
+    REQUIRE(test_txt.get() == 'L');
+    REQUIRE(test_txt.get() == 'i');
+    REQUIRE(test_txt.get() == 'n');
+    REQUIRE(test_txt.get() == 'e');
+    REQUIRE(test_txt.get() == ' ');
+    REQUIRE(test_txt.get() == '2');
+    REQUIRE(test_txt.get() == '\n');
+    REQUIRE(test_txt.error() == std::error_code());
+    REQUIRE(test_txt.get() == 0);
+    REQUIRE(test_txt.error() != std::error_code());
+}
