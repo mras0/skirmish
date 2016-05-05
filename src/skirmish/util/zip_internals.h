@@ -17,7 +17,7 @@ struct end_of_central_directory_record {
     uint16_t central_directory_records_this_disk;   // 8	    2	    Number of central directory records on this disk
     uint16_t central_directory_records_this_total;  // 10	    2	    Total number of central directory records
     uint32_t central_directory_size_bytes;          // 12	    4	    Size of central directory (bytes)
-    uint32_t central_directory_central_offset;      // 16	    4	    Offset of start of central directory, relative to start of archive
+    uint32_t central_directory_offset;              // 16	    4	    Offset of start of central directory, relative to start of archive
     uint16_t comment_length;                        // 20	    2	    Comment length (n)
                                                     // 22	    n	    Comment
 };

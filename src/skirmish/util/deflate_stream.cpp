@@ -18,6 +18,7 @@ public:
         , stream_()
         , crc32_(::crc32(0, nullptr, 0))
         , end_reached_(false) {
+        assert(!s.error());
         int ret = inflateInit2(&stream_, -MAX_WBITS); // Initialize inflate in raw mode (no header)
         if (ret != Z_OK) {
             throw zlib_exception("inflateInit failed", ret);
@@ -85,14 +86,13 @@ in_deflate_stream::~in_deflate_stream() = default;
 
 uint32_t in_deflate_stream::crc32() const
 {
-    assert(impl_->end_reached() && peek().begin() == buffer().end());
     return impl_->crc32();
 }
 
 array_view<uint8_t> in_deflate_stream::refill_in_deflate_stream()
 {
     if (impl_->end_reached()) {
-        return set_failed(std::make_error_code(std::errc::broken_pipe));;
+        return set_failed(std::make_error_code(std::errc::broken_pipe));
     }
     return impl_->refill();
 }
@@ -105,8 +105,8 @@ uint64_t in_deflate_stream::do_stream_size() const
 
 void in_deflate_stream::do_seek(int64_t offset, seekdir way)
 {
-    assert(false);
-    (void)offset; (void)way;
+    assert(way == seekdir::cur && offset >= 0 && static_cast<uint64_t>(offset) <= peek().size());
+    set_cursor(peek().begin() + offset);
 }
 
 uint64_t in_deflate_stream::do_tell() const

@@ -30,7 +30,7 @@ void read(util::in_stream& in, end_of_central_directory_record& r)
     read(in, r.central_directory_records_this_disk);
     read(in, r.central_directory_records_this_total);
     read(in, r.central_directory_size_bytes);
-    read(in, r.central_directory_central_offset);
+    read(in, r.central_directory_offset);
     read(in, r.comment_length);
 }
 

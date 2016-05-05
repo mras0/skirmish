@@ -228,7 +228,7 @@ array_view<uint8_t> in_file_stream::refill_in_file_stream()
     const uint64_t file_remaining = impl_->file_size_ - tell();
 
     if (!impl_->in_ || !file_remaining) {
-        return set_failed(std::make_error_code(std::errc::io_error));
+        return set_failed(std::make_error_code(std::errc::broken_pipe));
     }
 
     impl_->in_.seekg(impl_->file_pos_, std::ios_base::beg);
