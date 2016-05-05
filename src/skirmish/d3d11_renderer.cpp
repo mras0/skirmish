@@ -123,6 +123,15 @@ cbuffer ConstantBuffer : register( b0 )
 	matrix Projection;
 }
 
+Texture2D the_texture;
+
+const SamplerState the_texture_sampler
+{
+    Texture  = the_texture;
+    Filter   = MIN_MAG_MIP_LINEAR;
+    AddressU = Wrap;
+    AddressV = Wrap;
+};
 //--------------------------------------------------------------------------------------
 struct VS_OUTPUT
 {
@@ -150,7 +159,7 @@ VS_OUTPUT VS( float4 Pos : POSITION /*, float4 Color : COLOR */)
 //--------------------------------------------------------------------------------------
 float4 PS( VS_OUTPUT input ) : SV_Target
 {
-    return input.Color;
+    return the_texture.Sample(the_texture_sampler, input.Color.xy);
 }
 )";
 
@@ -163,6 +172,45 @@ class d3d11_create_context {
 public:
     ID3D11Device* device;
 };
+
+ComPtr<ID3D11ShaderResourceView> create_texture2d_view(ID3D11Device* device, unsigned width, unsigned height)
+{
+    D3D11_TEXTURE2D_DESC tex_desc;
+    ZeroMemory(&tex_desc, sizeof(tex_desc));
+    tex_desc.Width              = width;
+    tex_desc.Height             = height;
+    tex_desc.MipLevels          = 1;
+    tex_desc.ArraySize          = 1;
+    tex_desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+    tex_desc.SampleDesc.Count   = 1; // Default
+    tex_desc.SampleDesc.Quality = 0; // Default
+    tex_desc.Usage              = D3D11_USAGE_DEFAULT;
+    tex_desc.BindFlags          = D3D11_BIND_SHADER_RESOURCE;
+    tex_desc.CPUAccessFlags     = 0; // No CPU access after creation
+    tex_desc.MiscFlags          = 0;
+
+    std::vector<uint32_t> data(width*height);
+    for (unsigned y = 0; y < height; ++y) {
+        for (unsigned x = 0; x < width; ++x) {
+            // R = LSB, A = MSB
+            data[x+y*width] = 0xff000000 | static_cast<uint8_t>(x^y);
+        }
+    }
+    D3D11_SUBRESOURCE_DATA initial_data = { &data[0], width*sizeof(data[0]), 0};
+    ComPtr<ID3D11Texture2D> texture;
+    COM_CHECK(device->CreateTexture2D(&tex_desc, &initial_data, texture.GetAddressOf()));
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC view_desc;
+    ZeroMemory(&view_desc, sizeof(view_desc));
+    view_desc.Format = tex_desc.Format;
+    view_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    view_desc.Texture2D.MipLevels = tex_desc.MipLevels;
+    view_desc.Texture2D.MostDetailedMip = 0;
+    ComPtr<ID3D11ShaderResourceView> texture_view;
+    COM_CHECK(device->CreateShaderResourceView(texture.Get(), &view_desc, texture_view.GetAddressOf()));
+
+    return texture_view;
+}
 
 class d3d11_simple_obj::impl {
 public:
@@ -190,6 +238,8 @@ public:
         index_count = static_cast<UINT>(indices.size());
         index_buffer = create_buffer(device, D3D11_BIND_INDEX_BUFFER, indices.data(), static_cast<UINT>(indices.size() * sizeof(indices[0])));
 
+        texture_view = create_texture2d_view(device, 512, 256);
+
         // This might not be a great idea?
         device->GetImmediateContext(immediate_context.GetAddressOf());
     }
@@ -210,6 +260,9 @@ public:
         // Set primitive topology
         immediate_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+        ID3D11ShaderResourceView* shader_resources[] = { texture_view.Get() };
+        immediate_context->PSSetShaderResources(0, _countof(shader_resources), shader_resources);
+
         immediate_context->VSSetShader(vs.Get(), nullptr, 0);
         immediate_context->PSSetShader(ps.Get(), nullptr, 0);
 
@@ -227,6 +280,7 @@ private:
     ComPtr<ID3D11InputLayout>   vertex_layout;
     ComPtr<ID3D11Buffer>        vertex_buffer;
     ComPtr<ID3D11Buffer>        index_buffer;
+    ComPtr<ID3D11ShaderResourceView> texture_view;
     ComPtr<ID3D11DeviceContext> immediate_context;
     UINT                        index_count;
 };

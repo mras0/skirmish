@@ -238,7 +238,7 @@ int main()
             }
         });
 
-        world_pos camera_pos{grid_scale/2.0f, grid_scale/2.0f, 2.0f};
+        world_pos camera_pos{grid_scale/2.0f, grid_scale/2.0f, 5.0f};
         float view_ang = -pi_f;
         w.on_paint([&] {
             view_ang += 0.0025f * (key_down[key::left] * -1 + key_down[key::right] * 1);
@@ -246,7 +246,7 @@ int main()
 
             camera_pos += view_vec * (0.01f * (key_down[key::up] * 1 + key_down[key::down] * -1));
 
-            auto camera_target = camera_pos + view_vec;
+            auto camera_target = camera_pos + view_vec * 2;
             camera_target[2] = 0;
 
             std::ostringstream oss;
