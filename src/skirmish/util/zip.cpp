@@ -2,6 +2,7 @@
 #include "zip_internals.h"
 #include "deflate_stream.h"
 #include <map>
+#include <algorithm>
 #include <cassert>
 
 namespace skirmish { namespace zip {
@@ -62,8 +63,28 @@ private:
     }
 
     virtual void do_seek(int64_t offset, util::seekdir way) override {
-        assert(false);
-        (void)offset; (void)way;
+        if (way == util::seekdir::beg) {
+            offset -= tell();
+        } else if (way == util::seekdir::end) {
+            offset = stream_size() - offset - tell();
+        }
+
+        if (offset < 0) {
+            set_failed(std::make_error_code(std::errc::invalid_seek));
+            return;
+        }
+
+        // Discard 'offset' bytes
+#if 0
+        while (offset) {
+            ensure_bytes_available();
+            const auto now = std::min(peek().size(), static_cast<uint64_t>(offset));
+            set_cursor(peek().begin() + now);
+            offset -= now;
+        }
+#else
+        while (offset--) get();
+#endif
     }
 
     virtual uint64_t do_tell() const override {

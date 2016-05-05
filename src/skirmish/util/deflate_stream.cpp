@@ -30,27 +30,31 @@ public:
     }
 
     array_view<uint8_t> refill() {
-        assert(!end_reached_);
-
-        if (!stream_.avail_in) {
-            s_.ensure_bytes_available();
-            auto in_buf = s_.peek();
-            stream_.avail_in = static_cast<uInt>(in_buf.size());
-            stream_.next_in  = const_cast<uint8_t*>(in_buf.begin());
-        }
-
-        assert(stream_.avail_in);
-
+        assert(!stream_.avail_out);
         stream_.avail_out = buffer_size;
         stream_.next_out  = buffer_;
-        int ret = inflate(&stream_, Z_NO_FLUSH);
-        if (ret != Z_OK && ret != Z_STREAM_END) {
-            throw zlib_exception("zlib inflate failed: " + std::string(stream_.msg), ret);
-        }
 
-        if (ret == Z_STREAM_END) {
-            end_reached_ = true;
-        }
+        do {
+            assert(!end_reached_);
+
+            if (!stream_.avail_in) {
+                s_.ensure_bytes_available();
+                auto in_buf = s_.peek();
+                stream_.avail_in = static_cast<uInt>(in_buf.size());
+                stream_.next_in  = const_cast<uint8_t*>(in_buf.begin());
+            }
+
+            assert(stream_.avail_in);
+
+            int ret = inflate(&stream_, Z_NO_FLUSH);
+            if (ret != Z_OK && ret != Z_STREAM_END) {
+                throw zlib_exception("zlib inflate failed: " + std::string(stream_.msg ? stream_.msg : "unknown error"), ret);
+            }
+
+            if (ret == Z_STREAM_END) {
+                end_reached_ = true;
+            }
+        } while (!end_reached_ && stream_.avail_out);
 
         auto buf = make_array_view(buffer_, buffer_size - stream_.avail_out);
         crc32_ = ::crc32(crc32_, buf.begin(), static_cast<uInt>(buf.size()));

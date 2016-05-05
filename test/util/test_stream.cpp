@@ -119,4 +119,7 @@ TEST_CASE("little endian") {
     REQUIRE(in_mem_stream(u16_fede).get_u16_le() == 0xfede);
     const uint8_t u32_fede0abe[] = { 0xbe, 0x0a, 0xde, 0xfe };
     REQUIRE(in_mem_stream(u32_fede0abe).get_u32_le() == 0xfede0abe);
+
+    const uint8_t float_val[] = { 0x00, 0x00, 0x10, 0xC0 };
+    REQUIRE(in_mem_stream(float_val).get_float_le() == -2.25f);
 }

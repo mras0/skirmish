@@ -42,6 +42,9 @@ public:
     // Read little-endian 32-bit value
     uint32_t get_u32_le();
 
+    // Read little-endian ieee-754 single precision floating point value
+    float get_float_le();
+
     // Returns stream size (may or may not be meaningful for the stream)
     uint64_t stream_size() const {
         return do_stream_size();
@@ -134,6 +137,9 @@ private:
 class in_file_stream : public in_stream {
 public:
     explicit in_file_stream(const char* filename);
+    template<typename T> // TODO: constaint with enable_if magic, if it gives problems...
+    explicit in_file_stream(const T& x) : in_file_stream(x.c_str()) {
+    }
     ~in_file_stream();
 
 private:

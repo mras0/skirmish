@@ -149,18 +149,205 @@ auto calc_grid(int grid_size, float prescale, float grid_scale, float persistenc
     return vertices;
 };
 
+namespace skirmish { namespace md3 {
+
+static constexpr uint32_t max_name_length = 64;
+static constexpr uint32_t magic           = ('3'<<24) | ('P' << 16) | ('D' << 8) | 'I';
+
+struct header {
+    static constexpr uint32_t md3_version = 15;
+
+    static constexpr uint32_t max_frames   = 1024;
+    static constexpr uint32_t max_tags     = 16;
+    static constexpr uint32_t max_surfaces = 32;
+
+    uint32_t ident; // IDP3
+    uint32_t version;
+    char     name[max_name_length];
+    uint32_t flags;
+    uint32_t num_frames;
+    uint32_t num_tags;
+    uint32_t num_surfaces;
+    uint32_t num_skins;
+    uint32_t ofs_frames;
+    uint32_t ofs_tags;
+    uint32_t ofs_surfaces;
+    uint32_t ofs_end;
+
+    bool check() const {
+        return ident == magic && version == md3_version && num_frames < max_frames && num_tags < max_tags && num_surfaces < max_surfaces;
+    }
+};
+
+void read(util::in_stream& in, header& h)
+{
+    h.ident        = in.get_u32_le();
+    h.version      = in.get_u32_le();
+    in.read(h.name, sizeof(h.name));
+    h.flags        = in.get_u32_le();
+    h.num_frames   = in.get_u32_le();
+    h.num_tags     = in.get_u32_le();
+    h.num_surfaces = in.get_u32_le();
+    h.num_skins    = in.get_u32_le();
+    h.ofs_frames   = in.get_u32_le();
+    h.ofs_tags     = in.get_u32_le();
+    h.ofs_surfaces = in.get_u32_le();
+    h.ofs_end      = in.get_u32_le();
+}
+
+struct vec3 {
+    float x, y, z;
+};
+
+void read(util::in_stream& in, vec3& v)
+{
+    v.x = in.get_float_le();
+    v.y = in.get_float_le();
+    v.z = in.get_float_le();
+}
+
+std::ostream& operator<<(std::ostream& os, const vec3& v)
+{
+    return os << "( " << v.x << ", " << v.y << ", " << v.z << ")";
+}
+
+struct frame {
+    vec3    min_bounds;
+    vec3    max_bounds;
+    vec3    local_origin;
+    float   radius;
+    char    name[16];
+};
+
+void read(util::in_stream& in, frame& f)
+{
+    read(in, f.min_bounds);
+    read(in, f.max_bounds);
+    read(in, f.local_origin);
+    f.radius = in.get_float_le();
+    in.read(f.name, sizeof(f.name));
+}
+
+struct tag {
+    char name[max_name_length];
+    vec3 origin;
+    vec3 x_axis;
+    vec3 y_axis;
+    vec3 z_axis;
+};
+
+void read(util::in_stream& in, tag& t)
+{
+    in.read(t.name, sizeof(t.name));
+    read(in, t.origin);
+    read(in, t.x_axis);
+    read(in, t.y_axis);
+    read(in, t.z_axis);
+}
+
+struct surface {
+    uint32_t ident;
+    char     name[max_name_length];
+    uint32_t flags;
+    uint32_t num_frames;
+    uint32_t num_shaders;
+    uint32_t num_vertices;
+    uint32_t num_triangles;
+    uint32_t ofs_triangles;
+    uint32_t ofs_shaders;
+    uint32_t ofs_st;
+    uint32_t ofs_xyznormals;
+    uint32_t ofs_end;
+
+    bool check() const {
+        return ident == magic;
+    }
+};
+
+void read(util::in_stream& in, surface& s)
+{
+    s.ident          = in.get_u32_le();
+    in.read(s.name, sizeof(s.name));
+    s.flags          = in.get_u32_le();
+    s.num_frames     = in.get_u32_le();
+    s.num_shaders    = in.get_u32_le();
+    s.num_vertices   = in.get_u32_le();
+    s.num_triangles  = in.get_u32_le();
+    s.ofs_triangles  = in.get_u32_le();
+    s.ofs_shaders    = in.get_u32_le();
+    s.ofs_shaders    = in.get_u32_le();
+    s.ofs_st         = in.get_u32_le();
+    s.ofs_xyznormals = in.get_u32_le();
+    s.ofs_end        = in.get_u32_le();
+}
+
+} } // skirmish::md3
+
 int main()
 {
     try {
         const std::string data_dir = "../../data/";
 
-        util::in_file_stream pk3_stream{(data_dir + "md3-ange.pk3").c_str()};
+        util::in_file_stream pk3_stream{data_dir + "md3-ange.pk3"};
         zip::in_zip_archive pk3_arc{pk3_stream};
 
-        for (const auto& f : pk3_arc.filenames()) {
-            std::cout << f << std::endl;
+        //for (const auto& f : pk3_arc.filenames()) std::cout << f << std::endl;
+
+        //auto md3_stream = pk3_arc.get_file_stream("models/players/ange/lower.md3");
+        auto md3_stream = std::make_unique<util::in_file_stream>(R"(c:\temp\md3-ange\models\players\ange\lower.md3)");
+
+        md3::header h;
+        read(*md3_stream, h);
+        assert(h.check());
+
+        md3_stream->seek(h.ofs_frames, util::seekdir::beg);
+        for (uint32_t i = 0; i < h.num_frames; ++i) {
+            md3::frame f;
+            read(*md3_stream, f);
+            std::cout << "F " << f.name << " " << f.min_bounds << " -> " << f.max_bounds << " " << f.local_origin << " " << f.radius << '\n';
         }
+        assert(!md3_stream->error());
+
+        md3_stream->seek(h.ofs_tags, util::seekdir::beg);
+        for (uint32_t i = 0; i < h.num_tags; ++i) {
+            md3::tag t;
+            read(*md3_stream, t);
+            std::cout << "T " << t.name << " " << t.origin << " " << t.x_axis  << " " << t.y_axis << " " << t.z_axis << '\n';
+        }
+        assert(!md3_stream->error());
+
+        md3_stream->seek(h.ofs_surfaces, util::seekdir::beg);
+        for (uint32_t i = 0; i < h.num_surfaces; ++i) {
+            std::cout << md3_stream->tell() << "\n";
+            md3::surface s;
+            read(*md3_stream, s);
+            std::cout << "S " << s.name << "\n";
+#define P(x) do { std::cout << "  " << #x << " = " << s.x << "\n"; } while(false)
+            P(ident);
+            P(flags);
+            P(num_frames);
+            P(num_shaders);
+            P(num_vertices);
+            P(num_triangles);
+            P(ofs_triangles);
+            P(ofs_shaders);
+            P(ofs_st);
+            P(ofs_xyznormals);
+            P(ofs_end);
+#undef P
+            std::cout << "\n";
+            assert(s.check());
+        }
+        assert(!md3_stream->error());
+
+        //for (int i = 0; i < 16; ++i) {
+        //    const char* const hexchars = "0123456789abcdef";
+        //    const uint8_t b = md3_stream->get();
+        //    std::cout << hexchars[b>>4] << hexchars[b&0xf] << ' ' << b << "  ";
+        //}
+        //std::cout << '\n';
         if (1) return 0;
+
 
         auto bunny = load_obj(data_dir + "bunny.obj");
 

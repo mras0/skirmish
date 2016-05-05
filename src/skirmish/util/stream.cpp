@@ -80,6 +80,15 @@ uint32_t in_stream::get_u32_le()
     return res;
 }
 
+float in_stream::get_float_le()
+{
+    const uint32_t u32 = get_u32_le();
+    float f;
+    static_assert(sizeof(u32)==sizeof(f),"");
+    memcpy(&f, &u32, sizeof(float));
+    return f;
+}
+
 array_view<uint8_t> in_stream::zeros()
 {
     static const uint8_t zeros[256];
@@ -213,6 +222,7 @@ void in_file_stream::do_seek(int64_t offset, seekdir way)
         // invalidate buffer
         set_buffer(array_view<uint8_t>{});
         impl_->file_pos_ = new_file_pos;
+        impl_->in_.seekg(impl_->file_pos_, std::ios_base::beg);
     } else {
         set_failed(std::make_error_code(std::errc::invalid_seek));
     }
@@ -231,7 +241,8 @@ array_view<uint8_t> in_file_stream::refill_in_file_stream()
         return set_failed(std::make_error_code(std::errc::broken_pipe));
     }
 
-    impl_->in_.seekg(impl_->file_pos_, std::ios_base::beg);
+    impl_->file_pos_ += buffer().size();
+
     impl_->in_.read(reinterpret_cast<char*>(impl_->buffer_), std::min(file_remaining, static_cast<uint64_t>(impl_->buffer_size)));
     const auto byte_count = impl_->in_.gcount();
     if (!byte_count) {
