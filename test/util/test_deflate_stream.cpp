@@ -10,4 +10,5 @@ TEST_CASE("deflate test") {
     char output[14];
     uncompressed_stream.read(output, sizeof(output));
     REQUIRE(std::string(output, output+sizeof(output)) == "Line 1\nLine 2\n");
+    REQUIRE(uncompressed_stream.crc32() == 0x87E4F545);
 }

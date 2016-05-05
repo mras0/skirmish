@@ -10,6 +10,8 @@ public:
     explicit in_deflate_stream(in_stream& inner_stream);
     ~in_deflate_stream();
 
+    uint32_t crc32() const;
+
 private:
     class impl;
     std::unique_ptr<impl> impl_;

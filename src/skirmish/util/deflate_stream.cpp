@@ -13,7 +13,11 @@ public:
 
 class in_deflate_stream::impl {
 public:
-    explicit impl(in_stream& s) : s_(s), stream_() {
+    explicit impl(in_stream& s)
+        : s_(s)
+        , stream_()
+        , crc32_(::crc32(0, nullptr, 0))
+        , end_reached_(false) {
         int ret = inflateInit2(&stream_, -MAX_WBITS); // Initialize inflate in raw mode (no header)
         if (ret != Z_OK) {
             throw zlib_exception("inflateInit failed", ret);
@@ -25,6 +29,8 @@ public:
     }
 
     array_view<uint8_t> refill() {
+        assert(!end_reached_);
+
         if (!stream_.avail_in) {
             s_.ensure_bytes_available();
             auto in_buf = s_.peek();
@@ -41,12 +47,30 @@ public:
             throw zlib_exception("zlib inflate failed: " + std::string(stream_.msg), ret);
         }
 
-        return make_array_view(buffer_, buffer_size - stream_.avail_out);
+        if (ret == Z_STREAM_END) {
+            end_reached_ = true;
+        }
+
+        auto buf = make_array_view(buffer_, buffer_size - stream_.avail_out);
+        crc32_ = ::crc32(crc32_, buf.begin(), static_cast<uInt>(buf.size()));
+
+        return buf;
+    }
+
+    uint32_t crc32() const {
+        assert(end_reached_);
+        return crc32_;
+    }
+
+    bool end_reached() const {
+        return end_reached_;
     }
 
 private:
     in_stream&  s_;
     z_stream    stream_;
+    uint32_t    crc32_;
+    bool        end_reached_;
 
     static constexpr size_t buffer_size = 16384;
     uint8_t    buffer_[buffer_size];
@@ -59,8 +83,17 @@ in_deflate_stream::in_deflate_stream(in_stream& inner_stream) : impl_(new impl{i
 
 in_deflate_stream::~in_deflate_stream() = default;
 
+uint32_t in_deflate_stream::crc32() const
+{
+    assert(impl_->end_reached() && peek().begin() == buffer().end());
+    return impl_->crc32();
+}
+
 array_view<uint8_t> in_deflate_stream::refill_in_deflate_stream()
 {
+    if (impl_->end_reached()) {
+        return set_failed(std::make_error_code(std::errc::broken_pipe));;
+    }
     return impl_->refill();
 }
 
