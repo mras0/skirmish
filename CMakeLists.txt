@@ -26,6 +26,8 @@ add_definitions("/W4")
 
 add_definitions("-DWIN32 -D_SCL_SECURE_NO_WARNINGS -DUNICODE -D_UNICODE")
 
+add_subdirectory(third_party)
+
 add_subdirectory(src)
 include_directories(src)
 add_subdirectory(test)
