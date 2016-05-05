@@ -11,7 +11,7 @@ in_stream::in_stream()
     , cursor_(nullptr)
     , end_(nullptr)
     , error_()
-    , refill_(&in_stream::refill_zeros)
+    , refill_(&in_stream::zeros)
 {
 }
 
@@ -80,7 +80,7 @@ uint32_t in_stream::get_u32_le()
     return res;
 }
 
-array_view<uint8_t> in_stream::refill_zeros()
+array_view<uint8_t> in_stream::zeros()
 {
     static const uint8_t zeros[256];
     return make_array_view(zeros);
@@ -88,9 +88,10 @@ array_view<uint8_t> in_stream::refill_zeros()
 
 array_view<uint8_t> in_stream::set_failed(std::error_code error)
 {
+    assert(error);
     error_  = error;
-    refill_ = &in_stream::refill_zeros;
-    return refill_zeros();
+    refill_ = &in_stream::zeros;
+    return zeros();
 }
 
 in_zero_stream::in_zero_stream()
@@ -114,7 +115,7 @@ uint64_t in_zero_stream::do_tell() const
 in_mem_stream::in_mem_stream(const void* data, size_t bytes)
 {
     set_buffer(make_array_view(static_cast<const uint8_t*>(data), bytes));
-    refill_ = static_cast<refill_function_type>(&in_mem_stream::refill_in_mem_stream);
+    set_refill(&in_mem_stream::refill_in_mem_stream);
 }
 
 array_view<uint8_t> in_mem_stream::refill_in_mem_stream()
@@ -179,7 +180,7 @@ public:
 in_file_stream::in_file_stream(const char* filename) : impl_(new impl(filename))
 {
     if (impl_->in_) {
-        refill_ = static_cast<refill_function_type>(&in_file_stream::refill_in_file_stream);
+        set_refill(&in_file_stream::refill_in_file_stream);
     } else {
         set_failed(std::make_error_code(std::errc::no_such_file_or_directory));
     }

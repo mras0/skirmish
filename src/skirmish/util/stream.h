@@ -60,17 +60,23 @@ public:
 protected:
     explicit in_stream();
 
-    using refill_function_type = array_view<uint8_t> (in_stream::*)();
-    // Must return at least one more byte of data, may call set_failed
-    refill_function_type refill_;
-
-    array_view<uint8_t> refill_zeros();
-
+    // set error_ and start returning zeros (as a convenience a zero buffer is returned)
     array_view<uint8_t> set_failed(std::error_code error);
 
+    // view of complete underlying buffer
     array_view<uint8_t> buffer() const;
+
+    // sets a new buffer and resets the cursor to the start of it
     void set_buffer(const array_view<uint8_t>& av);
+
+    // set the cursor inside the current buffer
     void set_cursor(const uint8_t* new_pos);
+
+    // set the member-function to be called when the buffer underflows
+    template<typename C>
+    void set_refill(array_view<uint8_t> (C::*refill)()) {
+        refill_ = static_cast<refill_function_type>(refill);
+    }
 
 private:
     // start_ <= cursor_ <= end_
@@ -80,6 +86,13 @@ private:
 
     // starts out default constructed, errors are sticky
     std::error_code error_;
+
+    // Must return at least one more byte of data, may call set_failed
+    using refill_function_type = array_view<uint8_t> (in_stream::*)();
+    refill_function_type refill_;
+
+    // Returns view of static (const) zero buffer
+    array_view<uint8_t> zeros();
 
     virtual uint64_t do_stream_size() const = 0;
     virtual void do_seek(int64_t offset, seekdir way) = 0;

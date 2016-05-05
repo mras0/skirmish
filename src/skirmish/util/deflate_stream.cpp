@@ -14,7 +14,7 @@ private:
 
 in_deflate_stream::in_deflate_stream(in_stream& inner_stream) : impl_(new impl{inner_stream})
 {
-    refill_ = static_cast<refill_function_type>(&in_deflate_stream::refill_in_deflate_stream);
+    set_refill(&in_deflate_stream::refill_in_deflate_stream);
 }
 
 in_deflate_stream::~in_deflate_stream() = default;
