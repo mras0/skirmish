@@ -13,6 +13,8 @@
 #include <skirmish/perlin.h>
 #include <skirmish/tga.h>
 #include <skirmish/math/constants.h>
+#include <skirmish/util/stream.h>
+#include <skirmish/util/zip.h>
 
 #include <fstream>
 
@@ -151,6 +153,15 @@ int main()
 {
     try {
         const std::string data_dir = "../../data/";
+
+        util::in_file_stream pk3_stream{(data_dir + "md3-ange.pk3").c_str()};
+        zip::in_zip_archive pk3_arc{pk3_stream};
+
+        for (const auto& f : pk3_arc.filenames()) {
+            std::cout << f << std::endl;
+        }
+        if (1) return 0;
+
         auto bunny = load_obj(data_dir + "bunny.obj");
 
         const auto m = 10.0f * world_mat{
