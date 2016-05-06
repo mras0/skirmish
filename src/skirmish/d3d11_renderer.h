@@ -5,6 +5,8 @@
 #include <skirmish/math/types.h>
 #include <skirmish/util/array_view.h>
 
+struct ID3D11ShaderResourceView;
+
 namespace skirmish {
 
 class d3d11_create_context;
@@ -17,6 +19,18 @@ public:
 
 class d3d11_renderer;
 
+class d3d11_texture {
+public:
+    explicit d3d11_texture(d3d11_renderer& renderer, const util::array_view<uint32_t>& rgba_data, uint32_t width, uint32_t height);
+    ~d3d11_texture();
+
+    ID3D11ShaderResourceView* view();
+
+private:
+    class impl;
+    std::unique_ptr<impl> impl_;
+};
+
 class d3d11_simple_obj : public d3d11_renderable {
 public:
     explicit d3d11_simple_obj(d3d11_renderer& renderer, const util::array_view<world_pos>& vertices, const util::array_view<uint16_t>& indices);
@@ -24,6 +38,8 @@ public:
     virtual void do_render(d3d11_render_context& context) override;
 
     void update_vertices(const util::array_view<world_pos>& vertices);
+
+    void set_texture(d3d11_texture& texture);
 
 private:
     class impl;

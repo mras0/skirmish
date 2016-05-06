@@ -1,16 +1,12 @@
 #include "tga.h"
 #include <ostream>
+#include <cassert>
 
 namespace skirmish { namespace tga {
 
 enum class color_map_type : uint8_t {
     none = 0,
     present = 1
-};
-
-enum class image_type : uint8_t {
-    uncompressed_true_color = 2,
-    uncompressed_grayscale = 3 
 };
 
 void write_grayscale(std::ostream& os, unsigned width, unsigned height, const void* data)
@@ -28,7 +24,7 @@ void write_grayscale(std::ostream& os, unsigned width, unsigned height, const vo
     put_u16(0); // Color map length
     put_u8(0);  // Bits per pixel
     
-    // Image specificatio
+    // Image specification
     put_u16(0);                             // X-origin
     put_u16(0);                             // Y-origin
     put_u16(static_cast<uint16_t>(width));  // Width
@@ -39,6 +35,71 @@ void write_grayscale(std::ostream& os, unsigned width, unsigned height, const vo
     // Color map
     // Image
     os.write(static_cast<const char*>(data), width * height);
+}
+
+bool read(util::in_stream& in, image& img)
+{
+    assert(!in.error());
+
+    const auto id_length  = in.get();
+    const auto cmap_type  = static_cast<color_map_type>(in.get());
+    const auto img_type   = static_cast<image_type>(in.get());
+    // Color map specification
+    const auto cmap_first = in.get_u16_le();
+    const auto cmap_len   = in.get_u16_le();
+    const auto cmap_bpp   = in.get();
+    // Image specification
+    const auto x_origin   = in.get_u16_le();
+    const auto y_origin   = in.get_u16_le();
+    const auto width      = in.get_u16_le();
+    const auto height     = in.get_u16_le();
+    const auto bpp        = in.get();
+    const auto alpha_info = in.get();
+
+    if (in.error()) {
+        assert(false);
+        return false;
+    }
+
+    if (cmap_type != color_map_type::none ||
+        cmap_len ||
+        x_origin ||
+        y_origin ||
+        width == 0 ||
+        height == 0 ||
+        img_type != image_type::uncompressed_true_color ||
+        bpp != 24) {
+        assert(!"Unsupported image features");
+        return false;
+    }
+
+    // Skip Image ID
+    if (id_length) in.seek(id_length, util::seekdir::cur);
+    // No color map
+    assert(!cmap_len);
+    // Image data
+    img.type   = img_type;
+    img.width  = width;
+    img.height = height;
+    img.bpp    = bpp;
+    img.data.resize(width * height * ((bpp+7)/8));
+    in.read(&img.data[0], img.data.size());
+    return !in.error();
+}
+
+std::vector<uint32_t> to_rgba(const image& img)
+{
+    assert(img.type == image_type::uncompressed_true_color && img.bpp == 24);
+    const int size = img.width * img.height;
+    std::vector<uint32_t> res(size);
+    for (int i = 0; i < size; ++i) {
+        const uint8_t a = 0xff;
+        const uint8_t r = img.data[i *  3 + 0];
+        const uint8_t g = img.data[i *  3 + 1];
+        const uint8_t b = img.data[i *  3 + 2];
+        res[i] = (static_cast<uint32_t>(a)<<24) | (static_cast<uint32_t>(b)<<16) | (static_cast<uint32_t>(g)<<8) | r;
+    }
+    return res;
 }
 
 } } // namespace skirmish::tga

@@ -454,8 +454,7 @@ bool read(util::in_stream& in, file& f)
 } } // skirmish::md3
 
 world_pos to_world(const md3::vec3& v) {
-    // Scale a bit since the models come out small...
-    return 2.5f * md3::quake_to_meters_f * world_pos{v.x, v.y, v.z};
+    return md3::quake_to_meters_f * world_pos{v.x, v.y, v.z};
 }
 
 std::unique_ptr<d3d11_simple_obj> make_obj_from_md3_surface(d3d11_renderer& renderer, const md3::surface_with_data& surf)
@@ -489,6 +488,45 @@ std::string simple_tolower(const util::path& p)
         }
     }
     return s;
+}
+
+std::string find_file(const std::vector<std::string>& haystack, const std::string& needle)
+{
+    for (const auto& candidate : haystack) {
+        if (simple_tolower(util::path{candidate}.filename()) == needle) {
+            return candidate;
+        }
+    }
+    throw std::runtime_error("Could not find " + needle);
+}
+
+std::map<std::string, std::string> read_skin(util::in_stream& in)
+{
+    std::string skin_data(in.stream_size(), '\0');
+    in.read(&skin_data[0], skin_data.size());
+    if (in.error()) {
+        throw std::runtime_error("Error reading skin data");
+    }
+
+    std::map<std::string, std::string> res;
+    for (size_t pos = 0, size = skin_data.size(); pos < size;) {
+        const auto next_eol =  skin_data.find_first_of('\n', pos);
+        auto line = skin_data.substr(pos, next_eol-pos);
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        //std::cout << "Line: " << line << '\n';
+        const auto comma_pos = line.find_first_of(',');
+        if (comma_pos == 0 || comma_pos == std::string::npos) throw std::runtime_error("Invalid skin line: '" + line +"'");
+        auto mesh_name = line.substr(0, comma_pos);
+        auto texture_filename = line.substr(comma_pos + 1);
+
+        if (!res.insert({std::move(mesh_name), std::move(texture_filename)}).second) {
+            throw std::runtime_error("Invalid skin file: '" + mesh_name + "' defined more than once");
+        }
+
+        pos = next_eol == std::string::npos ? next_eol : next_eol+1;
+    }
+
+    return res;
 }
 
 int main()
@@ -550,12 +588,15 @@ int main()
         util::in_file_stream pk3_stream{data_dir + "md3-mario.pk3"};
         zip::in_zip_archive pk3_arc{pk3_stream};
 
-        for (const auto& md3_filename : pk3_arc.filenames()) {
-            util::path p{md3_filename};
-            auto fname = simple_tolower(p.filename());
-            //std::cout << "Considering " << p << "  - " << fname << "\n";
-            if(fname != "head.md3" && fname != "lower.md3" && fname != "upper.md3") continue;
+        auto process_one_md3_file = [&] (const std::string& name) {
+            const auto& pk3_files = pk3_arc.filenames();
+            auto find_in_pk3 = [&pk3_files](const std::string& filename) { return find_file(pk3_files, filename); };        
 
+            const auto skin_filename =  find_in_pk3(name + "_default.skin");
+            std::cout << "Loading " << skin_filename << "\n";
+            auto skin_info = read_skin(*pk3_arc.get_file_stream(skin_filename));
+
+            const auto md3_filename = find_in_pk3(name + ".md3");
             std::cout << "Loading " << md3_filename << "\n";
             auto md3_stream = pk3_arc.get_file_stream(md3_filename);
 
@@ -563,13 +604,32 @@ int main()
             if (!read(*md3_stream, md3_file)) {
                 throw std::runtime_error("Error loading md3 file");
             }
+            md3_stream.reset();
+
             for (const auto& surf : md3_file.surfaces) {
                 std::cout << " " << surf.hdr.name << " " << surf.hdr.num_vertices << " vertices " <<  surf.hdr.num_triangles << " triangles\n";
                 objs.push_back(make_obj_from_md3_surface(renderer, surf));
+                auto it = skin_info.find(surf.hdr.name);
+                if (it != skin_info.end()) {
+                    const auto& texture_filename = it->second;
+                    std::cout << " Loading texture: " << texture_filename << std::endl;
+                    auto tga_stream = pk3_arc.get_file_stream(texture_filename);
+                    tga::image img;
+                    if (!tga::read(*tga_stream, img)) {
+                        throw std::runtime_error("Could not load TGA " + texture_filename);
+                    }
+                    std::cout << "  " << img.width << " x " << img.height << std::endl;
+                    d3d11_texture tex(renderer, util::make_array_view(tga::to_rgba(img)), img.width, img.height);
+                    objs.back()->set_texture(tex);
+                }
                 renderer.add_renderable(*objs.back());
             }
-            std::cout << "Frame0 Bounds: " << to_world(md3_file.frames[0].min_bounds) << " " << to_world(md3_file.frames[0].max_bounds) << "\n";
-        }
+            std::cout << " Frame0 Bounds: " << to_world(md3_file.frames[0].max_bounds) << " " << to_world(md3_file.frames[0].min_bounds) << "\n";
+        };
+        
+        process_one_md3_file("head");
+        process_one_md3_file("lower");
+        process_one_md3_file("upper");
 
         w.on_key_down([&](key k) {
             key_down[k] = true; 
