@@ -326,6 +326,95 @@ void read(util::in_stream& in, vertex& v)
     v.na    = in.get();
 }
 
+struct surface_with_data {
+    surface               hdr;
+    std::vector<shader>   shaders;
+    std::vector<triangle> triangles;
+    std::vector<texcoord> texcoords;
+    std::vector<vertex>   frames;
+};
+
+template<typename T>
+bool read_to_vec(util::in_stream& in, std::vector<T>& v, uint64_t abs_stream_offset, uint32_t count)
+{
+    in.seek(abs_stream_offset, util::seekdir::beg);
+    v.resize(count);
+    for (auto& e : v) {
+        read(in, e);
+    }
+    return !in.error();
+}
+
+bool read(util::in_stream& in, surface_with_data& s)
+{
+    const auto surface_start = in.tell();
+
+    // Header
+    read(in, s.hdr);
+    if (in.error() || !s.hdr.check()) return false;
+
+    // Shaders    
+    if (!read_to_vec(in, s.shaders, surface_start + s.hdr.ofs_shaders, s.hdr.num_shaders)) {
+        return false;
+    }
+
+    // Triangles
+    if (!read_to_vec(in, s.triangles, surface_start + s.hdr.ofs_triangles, s.hdr.num_triangles)) {
+        return false;
+    }
+
+    // Texture coordinates
+    if (!read_to_vec(in, s.texcoords, surface_start + s.hdr.ofs_st, s.hdr.num_vertices)) {
+        return false;
+    }
+
+    // Frames (each frame consists of 'num_vertices' vertices)
+    if (!read_to_vec(in, s.frames, surface_start + s.hdr.ofs_xyznormals, s.hdr.num_frames * s.hdr.num_vertices)) {
+        return false;
+    }
+
+    // Go to next surface
+    in.seek(surface_start + s.hdr.ofs_end, util::seekdir::beg);
+
+    return !in.error();
+}
+
+struct file {
+    header                          hdr;
+    std::vector<frame>              frames;
+    std::vector<tag>                tags;
+    std::vector<surface_with_data>  surfaces;
+};
+
+bool read(util::in_stream& in, file& f)
+{
+    // Header
+    read(in, f.hdr);
+    if (in.error() || !f.hdr.check()) {
+        return false;
+    }
+    assert(!f.hdr.num_skins);
+
+    // Frames
+    if (!read_to_vec(in, f.frames, f.hdr.ofs_frames, f.hdr.num_frames)) {
+        return false;
+    }
+
+    // Tags
+    if (!read_to_vec(in, f.tags, f.hdr.ofs_tags, f.hdr.num_tags)) {
+        return false;
+    }
+
+    // Surfaces
+    if (!read_to_vec(in, f.surfaces, f.hdr.ofs_surfaces, f.hdr.num_surfaces)) {
+        return false;
+    }
+
+    // TODO: Verify that the number of frames in each surfaces matches the global value etc.
+
+    return !in.error();
+}
+
 } } // skirmish::md3
 
 int main()
@@ -338,8 +427,8 @@ int main()
 
         //for (const auto& f : pk3_arc.filenames()) std::cout << f << std::endl;
 
-        //auto md3_stream = pk3_arc.get_file_stream("models/players/ange/upper.md3");
-        auto md3_stream = std::make_unique<util::in_file_stream>(R"(c:\temp\md3-ange\models\players\ange\lower.md3)");
+        auto md3_stream = pk3_arc.get_file_stream("models/players/ange/upper.md3");
+        //auto md3_stream = std::make_unique<util::in_file_stream>(R"(c:\temp\md3-ange\models\players\ange\lower.md3)");
 
         md3::header h;
         read(*md3_stream, h);
@@ -420,6 +509,16 @@ int main()
             md3_stream->seek(surface_start + s.ofs_end, util::seekdir::beg);
         }
         assert(!md3_stream->error());
+
+        md3_stream.reset();
+
+        md3::file md3_file;
+        md3_stream = pk3_arc.get_file_stream("models/players/ange/upper.md3");
+        read(*md3_stream, md3_file);
+
+        for (const auto& s : md3_file.surfaces) {
+            std::cout << "Surface " << s.hdr.name << std::endl;
+        }
 
         //for (int i = 0; i < 16; ++i) {
         //    const char* const hexchars = "0123456789abcdef";
