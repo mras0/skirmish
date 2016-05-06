@@ -457,15 +457,22 @@ world_pos to_world(const md3::vec3& v) {
     return md3::quake_to_meters_f * world_pos{v.x, v.y, v.z};
 }
 
-std::unique_ptr<d3d11_simple_obj> make_obj_from_md3_surface(d3d11_renderer& renderer, const md3::surface_with_data& surf)
+std::vector<simple_vertex> vertices_from_frame(const md3::surface_with_data& surf, unsigned frame)
 {
     std::vector<simple_vertex> vs;
-    std::vector<uint16_t>  ts;
-
     assert(surf.hdr.num_vertices < 65535);
+    assert(frame < surf.hdr.num_frames);
+    const uint32_t offset = frame*surf.hdr.num_vertices;
     for (uint32_t i = 0; i < surf.hdr.num_vertices; ++i) {
-        vs.push_back(simple_vertex{to_world(surf.frames[i].position()), surf.texcoords[i].s, surf.texcoords[i].t});
+        vs.push_back(simple_vertex{to_world(surf.frames[offset+i].position()), surf.texcoords[i].s, surf.texcoords[i].t});
     }
+    return vs;
+}
+
+std::unique_ptr<d3d11_simple_obj> make_obj_from_md3_surface(d3d11_renderer& renderer, const md3::surface_with_data& surf)
+{
+    std::vector<simple_vertex> vs = vertices_from_frame(surf, 0);
+    std::vector<uint16_t>  ts;
 
     for (uint32_t i = 0; i < surf.hdr.num_triangles; ++i) {
         assert(surf.triangles[i].a < surf.hdr.num_vertices);
@@ -576,7 +583,7 @@ int main()
         }*/
 
         win32_main_window w{640, 480};
-        std::map<key, bool> key_down;        
+        std::map<key, bool> key_down;
 
         d3d11_renderer renderer{w};
         //d3d11_simple_obj bunny_obj{renderer, util::make_array_view(bunny.vertices), util::make_array_view(bunny.indices)};
@@ -588,7 +595,7 @@ int main()
         util::in_file_stream pk3_stream{data_dir + "md3-ange.pk3"};
         zip::in_zip_archive pk3_arc{pk3_stream};
 
-        auto process_one_md3_file = [&] (const std::string& name) {
+        auto process_one_md3_file = [&] (const std::string& name, const world_pos& initial_pos) {
             const auto& pk3_files = pk3_arc.filenames();
             auto find_in_pk3 = [&pk3_files](const std::string& filename) { return find_file(pk3_files, filename); };        
 
@@ -622,14 +629,19 @@ int main()
                     d3d11_texture tex(renderer, util::make_array_view(tga::to_rgba(img)), img.width, img.height);
                     objs.back()->set_texture(tex);
                 }
+                auto world_mat = world_transform::identity();
+                world_mat[0][3] = initial_pos.x();
+                world_mat[1][3] = initial_pos.y();
+                world_mat[2][3] = initial_pos.z();
+                objs.back()->set_world_transform(world_mat);
                 renderer.add_renderable(*objs.back());
             }
             std::cout << " Frame0 Bounds: " << to_world(md3_file.frames[0].max_bounds) << " " << to_world(md3_file.frames[0].min_bounds) << "\n";
         };
         
-        process_one_md3_file("head");
-        process_one_md3_file("lower");
-        process_one_md3_file("upper");
+        process_one_md3_file("head", {0.0f,0.0f,0.5f});
+        process_one_md3_file("upper", {0.0f,0.0f,0.0f});
+        process_one_md3_file("lower", {0.0f,0.0f,-0.5f});
 
         w.on_key_down([&](key k) {
             key_down[k] = true; 

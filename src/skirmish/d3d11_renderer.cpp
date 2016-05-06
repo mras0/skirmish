@@ -111,6 +111,12 @@ ComPtr<ID3D11Buffer> create_buffer(ID3D11Device* device, D3D11_BIND_FLAG bind_fl
     return buffer;
 }
 
+struct ConstantBuffer {
+    XMMATRIX mWorld;
+    XMMATRIX mView;
+    XMMATRIX mProjection;
+};
+
 const char shader_source[] = 
 R"(
 //--------------------------------------------------------------------------------------
@@ -167,6 +173,7 @@ float4 PS( VS_OUTPUT input ) : SV_Target
 class d3d11_render_context {
 public:
     ID3D11DeviceContext* immediate_context;
+    ConstantBuffer       contants;
 };
 
 class d3d11_create_context {
@@ -247,11 +254,27 @@ public:
         index_count = static_cast<UINT>(indices.size());
         index_buffer = create_buffer(device, D3D11_BIND_INDEX_BUFFER, indices.data(), static_cast<UINT>(indices.size() * sizeof(indices[0])));
 
+        // Create constant buffer
+        constant_buffer = create_buffer(device, D3D11_BIND_CONSTANT_BUFFER, nullptr, sizeof(ConstantBuffer));
+
         // This might not be a great idea?
         device->GetImmediateContext(immediate_context.GetAddressOf());
+
+        transform = world_transform::identity();
     }
 
-    void do_render(d3d11_render_context&) {
+    void do_render(d3d11_render_context& render_context) {
+        ConstantBuffer constants = render_context.contants;
+        static_assert(sizeof(transform) == sizeof(XMMATRIX), "");
+        memcpy(&constants.mWorld, &transform, sizeof(transform));
+
+        // Update constant buffer
+        immediate_context->UpdateSubresource(constant_buffer.Get(), 0, nullptr, &constants, 0, 0);
+
+        // Set constant buffer and shaders
+        ID3D11Buffer* constant_buffers[] = { constant_buffer.Get() };
+        immediate_context->VSSetConstantBuffers(0, _countof(constant_buffers), constant_buffers);
+
         // Set the input layout
         immediate_context->IASetInputLayout(vertex_layout.Get());
 
@@ -281,6 +304,10 @@ public:
         immediate_context->UpdateSubresource(vertex_buffer.Get(), 0, nullptr, vertices.data(), 0, 0);
     }
 
+    void set_world_transform(const world_transform& xform) {
+        transform = xform;
+    }
+
     void set_texture(d3d11_texture& texture) {
         texture_view.Reset();
         texture_view = texture.view();
@@ -292,9 +319,11 @@ private:
     ComPtr<ID3D11InputLayout>        vertex_layout;
     ComPtr<ID3D11Buffer>             vertex_buffer;
     ComPtr<ID3D11Buffer>             index_buffer;
+    ComPtr<ID3D11Buffer>             constant_buffer;
     ComPtr<ID3D11ShaderResourceView> texture_view;
     ComPtr<ID3D11DeviceContext>      immediate_context;
     UINT                             index_count;
+    world_transform                  transform;
 };
 
 d3d11_simple_obj::d3d11_simple_obj(d3d11_renderer& renderer, const util::array_view<simple_vertex>& vertices, const util::array_view<uint16_t>& indices) : impl_(new impl{renderer, vertices, indices}) {
@@ -309,6 +338,11 @@ void d3d11_simple_obj::update_vertices(const util::array_view<simple_vertex>& ve
 void d3d11_simple_obj::set_texture(d3d11_texture& texture)
 {
     impl_->set_texture(texture);
+}
+
+void d3d11_simple_obj::set_world_transform(const world_transform & xform)
+{
+    impl_->set_world_transform(xform);
 }
 
 void d3d11_simple_obj::do_render(d3d11_render_context& context) {
@@ -414,9 +448,6 @@ public:
         vp.TopLeftY = 0;
         immediate_context_->RSSetViewports(1, &vp);
 
-        // Create constant buffer
-        constant_buffer = create_buffer(device_.Get(), D3D11_BIND_CONSTANT_BUFFER, nullptr, sizeof(ConstantBuffer));
-
         create_context_.device = device_.Get();
 
         LARGE_INTEGER freq, count;
@@ -458,15 +489,14 @@ public:
         // Clear depth buffer
         immediate_context_->ClearDepthStencilView(depth_stencil_view_.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
 
-        // Update constant buffer
-        immediate_context_->UpdateSubresource(constant_buffer.Get(), 0, nullptr, &constants_, 0, 0);
-
-        // Set constant buffer and shaders
-        ID3D11Buffer* constant_buffers[] = { constant_buffer.Get() };
-        immediate_context_->VSSetConstantBuffers(0, _countof(constant_buffers), constant_buffers);
+        LARGE_INTEGER freq, count;
+        QueryPerformanceFrequency(&freq);
+        QueryPerformanceCounter(&count);
+        constants_.mWorld = XMMatrixRotationZ((float)(1.5*double(count.QuadPart)/double(freq.QuadPart)));
 
         d3d11_render_context render_context {
-            immediate_context_.Get()
+            immediate_context_.Get(),
+            constants_,
         };
         for (auto r : renderables_) {
             r->do_render(render_context);
@@ -485,12 +515,8 @@ private:
     ComPtr<ID3D11DeviceContext>     immediate_context_;
     ComPtr<ID3D11RenderTargetView>  render_target_view_;
     ComPtr<ID3D11DepthStencilView>  depth_stencil_view_;
-    ComPtr<ID3D11Buffer>            constant_buffer;
-    struct ConstantBuffer {
-        XMMATRIX mWorld;
-        XMMATRIX mView;
-        XMMATRIX mProjection;
-    };
+    XMMATRIX                        view_matrix;
+    XMMATRIX                        projection_matrix;
     std::vector<d3d11_renderable*>  renderables_;
     d3d11_create_context            create_context_;
     ConstantBuffer                  constants_;
