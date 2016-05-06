@@ -70,12 +70,13 @@ private:
         }
 
         if (offset < 0) {
+            assert(false);
             set_failed(std::make_error_code(std::errc::invalid_seek));
             return;
         }
 
         // Discard 'offset' bytes
-#if 0
+#if 1
         while (offset) {
             ensure_bytes_available();
             const auto now = std::min(peek().size(), static_cast<uint64_t>(offset));

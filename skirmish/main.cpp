@@ -317,6 +317,8 @@ struct vertex {
     uint8_t nz, na;  // Zenith and azimuth angles of normal vector. 255 corresponds to 2 pi.
 };
 
+static constexpr float xyz_scale = 1.0f / 64.0f;
+
 void read(util::in_stream& in, vertex& v)
 {
     v.x     = static_cast<int16_t>(in.get_u16_le());
@@ -348,29 +350,51 @@ bool read_to_vec(util::in_stream& in, std::vector<T>& v, uint64_t abs_stream_off
 bool read(util::in_stream& in, surface_with_data& s)
 {
     const auto surface_start = in.tell();
-
+    
     // Header
     read(in, s.hdr);
     if (in.error() || !s.hdr.check()) return false;
 
-    // Shaders    
-    if (!read_to_vec(in, s.shaders, surface_start + s.hdr.ofs_shaders, s.hdr.num_shaders)) {
-        return false;
-    }
+    // Read in the order the elements appear in the file to avoid seeking backwards
+    enum element { e_shaders, e_triangles, e_texcoords, e_frames };
+    std::pair<element, uint32_t> elements[] = {
+        { e_shaders   , s.hdr.ofs_shaders    },
+        { e_triangles , s.hdr.ofs_triangles  },
+        { e_texcoords , s.hdr.ofs_st         },
+        { e_frames    , s.hdr.ofs_xyznormals }
+    };
+    std::sort(std::begin(elements), std::end(elements), [](const auto& l, const auto& r) { return l.second < r.second; });
 
-    // Triangles
-    if (!read_to_vec(in, s.triangles, surface_start + s.hdr.ofs_triangles, s.hdr.num_triangles)) {
-        return false;
-    }
+    for (const auto& e : elements) {
+        switch (e.first) {
+        case e_shaders:
+            if (!read_to_vec(in, s.shaders, surface_start + s.hdr.ofs_shaders, s.hdr.num_shaders)) {
+                assert(false);
+                return false;
+            }
+            break;
 
-    // Texture coordinates
-    if (!read_to_vec(in, s.texcoords, surface_start + s.hdr.ofs_st, s.hdr.num_vertices)) {
-        return false;
-    }
+        case e_triangles:
+            if (!read_to_vec(in, s.triangles, surface_start + s.hdr.ofs_triangles, s.hdr.num_triangles)) {
+                assert(false);
+                return false;
+            }
+            break;
 
-    // Frames (each frame consists of 'num_vertices' vertices)
-    if (!read_to_vec(in, s.frames, surface_start + s.hdr.ofs_xyznormals, s.hdr.num_frames * s.hdr.num_vertices)) {
-        return false;
+        case e_texcoords:
+            if (!read_to_vec(in, s.texcoords, surface_start + s.hdr.ofs_st, s.hdr.num_vertices)) {
+                assert(false);
+                return false;
+            }
+            break;
+        case e_frames:
+            // Frames (each frame consists of 'num_vertices' vertices)
+            if (!read_to_vec(in, s.frames, surface_start + s.hdr.ofs_xyznormals, s.hdr.num_frames * s.hdr.num_vertices)) {
+                assert(false);
+                return false;
+            }
+            break;
+        }
     }
 
     // Go to next surface
@@ -397,16 +421,19 @@ bool read(util::in_stream& in, file& f)
 
     // Frames
     if (!read_to_vec(in, f.frames, f.hdr.ofs_frames, f.hdr.num_frames)) {
+        assert(false);
         return false;
     }
 
     // Tags
     if (!read_to_vec(in, f.tags, f.hdr.ofs_tags, f.hdr.num_tags)) {
+        assert(false);
         return false;
     }
 
     // Surfaces
     if (!read_to_vec(in, f.surfaces, f.hdr.ofs_surfaces, f.hdr.num_surfaces)) {
+        assert(false);
         return false;
     }
 
@@ -417,118 +444,36 @@ bool read(util::in_stream& in, file& f)
 
 } } // skirmish::md3
 
+std::unique_ptr<d3d11_simple_obj> make_obj_from_md3_surface(d3d11_renderer& renderer, const md3::surface_with_data& surf)
+{
+    std::vector<world_pos> vs;
+    std::vector<uint16_t>  ts;
+
+    const auto m2 = 0.05f * world_mat::identity();
+
+    assert(surf.hdr.num_vertices < 65535);
+    for (uint32_t i = 0; i < surf.hdr.num_vertices; ++i) {
+        vs.push_back(m2 * world_pos{surf.frames[i].x * md3::xyz_scale, surf.frames[i].y * md3::xyz_scale, surf.frames[i].z * md3::xyz_scale});
+    }
+
+    for (uint32_t i = 0; i < surf.hdr.num_triangles; ++i) {
+        assert(surf.triangles[i].a < surf.hdr.num_vertices);
+        assert(surf.triangles[i].b < surf.hdr.num_vertices);
+        assert(surf.triangles[i].c < surf.hdr.num_vertices);
+        ts.push_back(static_cast<uint16_t>(surf.triangles[i].a));
+        ts.push_back(static_cast<uint16_t>(surf.triangles[i].b));
+        ts.push_back(static_cast<uint16_t>(surf.triangles[i].c));
+    }
+
+    return std::make_unique<d3d11_simple_obj>(renderer, util::make_array_view(vs), util::make_array_view(ts));
+}
+
 int main()
 {
     try {
         const std::string data_dir = "../../data/";
-
-        util::in_file_stream pk3_stream{data_dir + "md3-ange.pk3"};
-        zip::in_zip_archive pk3_arc{pk3_stream};
-
-        //for (const auto& f : pk3_arc.filenames()) std::cout << f << std::endl;
-
-        auto md3_stream = pk3_arc.get_file_stream("models/players/ange/upper.md3");
-        //auto md3_stream = std::make_unique<util::in_file_stream>(R"(c:\temp\md3-ange\models\players\ange\lower.md3)");
-
-        md3::header h;
-        read(*md3_stream, h);
-        assert(h.check());
-
-        md3_stream->seek(h.ofs_frames, util::seekdir::beg);
-        for (uint32_t i = 0; i < h.num_frames; ++i) {
-            md3::frame f;
-            read(*md3_stream, f);
-            //std::cout << "F " << f.name << " " << f.min_bounds << " -> " << f.max_bounds << " " << f.local_origin << " " << f.radius << '\n';
-        }
-        assert(!md3_stream->error());
-
-        md3_stream->seek(h.ofs_tags, util::seekdir::beg);
-        for (uint32_t i = 0; i < h.num_tags; ++i) {
-            md3::tag t;
-            read(*md3_stream, t);
-            std::cout << "T " << t.name << " " << t.origin << " " << t.x_axis  << " " << t.y_axis << " " << t.z_axis << '\n';
-        }
-        assert(!md3_stream->error());
-
-        md3_stream->seek(h.ofs_surfaces, util::seekdir::beg);
-        for (uint32_t i = 0; i < h.num_surfaces; ++i) {
-            const auto surface_start = md3_stream->tell();
-            md3::surface s;
-            read(*md3_stream, s);
-            std::cout << "S " << s.name << "\n";
-#define P(x) do { std::cout << "  " << #x << " = " << s.x << "\n"; } while(false)
-            P(ident);
-            P(flags);
-            P(num_frames);
-            P(num_shaders);
-            P(num_vertices);
-            P(num_triangles);
-            P(ofs_triangles);
-            P(ofs_shaders);
-            P(ofs_st);
-            P(ofs_xyznormals);
-            P(ofs_end);
-#undef P
-            std::cout << "\n";
-            assert(s.check());
-
-            // Shaders
-            md3_stream->seek(surface_start + s.ofs_shaders, util::seekdir::beg);
-            for (uint32_t shader = 0; shader < s.num_shaders; ++shader) {
-                md3::shader sh;
-                read(*md3_stream, sh);
-                std::cout << "    Shader " << sh.name << " " << sh.index << "\n";
-            }
-
-            // Triangles
-            md3_stream->seek(surface_start + s.ofs_triangles, util::seekdir::beg);
-            for (uint32_t triangle = 0; triangle < s.num_triangles; ++triangle) {
-                md3::triangle t;
-                read(*md3_stream, t);
-                //std::cout << "    Tri " << t.a << " " << t.b << " " << t.c << "\n";
-            }
-
-            // Texture coordinates for all vertices
-            for (uint32_t vert_idx = 0; vert_idx < s.num_vertices; ++vert_idx) {
-                md3::texcoord st;
-                read(*md3_stream, st);
-                //std::cout << "    Tex " << st.s << " " << st.t << "\n";
-            }
-
-            // Read animation frames
-            for (uint32_t frame = 0; frame < s.num_frames; ++frame) {
-                // Which each consists of a complete set of positions + normals
-                for (uint32_t vert_idx = 0; vert_idx < s.num_vertices; ++vert_idx) {
-                    md3::vertex v;
-                    read(*md3_stream, v);
-                    //std::cout << "    V " << v.x << " " << v.y << " " << v.z << " " << (int)v.nz << " " << (int)v.na << "\n";
-                }
-            }
-
-            // Go to next surface
-            md3_stream->seek(surface_start + s.ofs_end, util::seekdir::beg);
-        }
-        assert(!md3_stream->error());
-
-        md3_stream.reset();
-
-        md3::file md3_file;
-        md3_stream = pk3_arc.get_file_stream("models/players/ange/upper.md3");
-        read(*md3_stream, md3_file);
-
-        for (const auto& s : md3_file.surfaces) {
-            std::cout << "Surface " << s.hdr.name << std::endl;
-        }
-
-        //for (int i = 0; i < 16; ++i) {
-        //    const char* const hexchars = "0123456789abcdef";
-        //    const uint8_t b = md3_stream->get();
-        //    std::cout << hexchars[b>>4] << hexchars[b&0xf] << ' ' << b << "  ";
-        //}
-        //std::cout << '\n';
-        if (1) return 0;
-
-
+        
+        /*
         auto bunny = load_obj(data_dir + "bunny.obj");
 
         const auto m = 10.0f * world_mat{
@@ -537,7 +482,7 @@ int main()
             0, 1, 0};
 
         std::transform(begin(bunny.vertices), end(bunny.vertices), begin(bunny.vertices), [&m](const auto& v) { return m * v; });
-        
+
         constexpr int grid_size = 250;
         static_assert(grid_size * grid_size <= 65335, "Grid too large");
 
@@ -567,19 +512,51 @@ int main()
                 indices.push_back(static_cast<uint16_t>(idx+grid_size));
                 indices.push_back(static_cast<uint16_t>(idx));
             }
-        }
+        }*/
 
         win32_main_window w{640, 480};
         std::map<key, bool> key_down;        
 
         d3d11_renderer renderer{w};
-        d3d11_simple_obj bunny_obj{renderer, util::make_array_view(bunny.vertices), util::make_array_view(bunny.indices)};
-        d3d11_simple_obj terrain_obj{renderer, util::make_array_view(vertices), util::make_array_view(indices)};
-        renderer.add_renderable(bunny_obj);
-        renderer.add_renderable(terrain_obj);
+        //d3d11_simple_obj bunny_obj{renderer, util::make_array_view(bunny.vertices), util::make_array_view(bunny.indices)};
+        //d3d11_simple_obj terrain_obj{renderer, util::make_array_view(vertices), util::make_array_view(indices)};
+        //renderer.add_renderable(bunny_obj);
+        //renderer.add_renderable(terrain_obj);
+
+        std::vector<std::unique_ptr<d3d11_simple_obj>> objs;
+        util::in_file_stream pk3_stream{data_dir + "md3-mario.pk3"};
+        zip::in_zip_archive pk3_arc{pk3_stream};
+
+        for (const auto& f : pk3_arc.filenames()) std::cout << f << std::endl;
+
+        const std::vector<std::string> md3_filenames{
+            "models/players/mario/HEAD.md3",
+            "models/players/mario/LOWER.MD3",
+            "models/players/mario/UPPER.MD3"
+        };
+
+        for (const auto& md3_filename : md3_filenames) {
+            std::cout << "Loading " << md3_filename << "\n";
+            auto md3_stream = pk3_arc.get_file_stream(md3_filename);
+
+            md3::file md3_file;
+            if (!read(*md3_stream, md3_file)) {
+                throw std::runtime_error("Error loading md3 file");
+            }
+
+            for (unsigned int i = 0; i < md3_file.hdr.num_surfaces; ++i) {
+                std::cout << "  " << i << " " << md3_file.surfaces[i].hdr.name << "\n";
+            }
+
+            for (const auto& surf : md3_file.surfaces) {
+                objs.push_back(make_obj_from_md3_surface(renderer, surf));
+                renderer.add_renderable(*objs.back());
+            }
+        }
 
         w.on_key_down([&](key k) {
             key_down[k] = true; 
+            /*
             bool needs_to_recalc_grid = false;
             constexpr float persistence_step = 0.05f;
             constexpr float prescale_step = 1;
@@ -606,7 +583,7 @@ int main()
             if (needs_to_recalc_grid) {
                 recalc_grid();
                 terrain_obj.update_vertices(util::make_array_view(vertices));
-            }
+            }*/
         });
         w.on_key_up([&](key k) {
             key_down[k] = false;
@@ -616,8 +593,9 @@ int main()
             }
         });
 
-        world_pos camera_pos{grid_scale/2.0f, grid_scale/2.0f, 2.0f};
-        float view_ang = -pi_f;
+        //world_pos camera_pos{grid_scale/2.0f, grid_scale/2.0f, 2.0f};
+        world_pos camera_pos{2.0f, 2.0f, 2.0f};
+        float view_ang = -0.5f;//-pi_f;
         w.on_paint([&] {
             view_ang += 0.0025f * (key_down[key::left] * -1 + key_down[key::right] * 1);
             world_pos view_vec{sinf(view_ang), -cosf(view_ang), 0.0f};
@@ -628,7 +606,7 @@ int main()
             camera_target[2] = 0;
 
             std::ostringstream oss;
-            oss << camera_pos << " " << camera_target;
+            oss << camera_pos << " " << camera_target << " viewdir: " << view_ang;
             w.set_title(oss.str());
 
             renderer.set_view(camera_pos, camera_target);

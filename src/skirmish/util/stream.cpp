@@ -224,6 +224,7 @@ void in_file_stream::do_seek(int64_t offset, seekdir way)
         impl_->file_pos_ = new_file_pos;
         impl_->in_.seekg(impl_->file_pos_, std::ios_base::beg);
     } else {
+        assert(false);
         set_failed(std::make_error_code(std::errc::invalid_seek));
     }
 }
