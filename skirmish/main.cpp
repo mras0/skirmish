@@ -275,10 +275,55 @@ void read(util::in_stream& in, surface& s)
     s.num_triangles  = in.get_u32_le();
     s.ofs_triangles  = in.get_u32_le();
     s.ofs_shaders    = in.get_u32_le();
-    s.ofs_shaders    = in.get_u32_le();
     s.ofs_st         = in.get_u32_le();
     s.ofs_xyznormals = in.get_u32_le();
     s.ofs_end        = in.get_u32_le();
+}
+
+struct shader {
+    char     name[max_name_length];
+    uint32_t index;
+};
+
+void read(util::in_stream& in, shader& s)
+{
+    in.read(s.name, sizeof(s.name));
+    s.index = in.get_u32_le();
+}
+
+struct triangle {
+    uint32_t a, b, c;
+};
+
+void read(util::in_stream& in, triangle& t)
+{
+    t.a = in.get_u32_le();
+    t.b = in.get_u32_le();
+    t.c = in.get_u32_le();
+}
+
+struct texcoord {
+    float s, t;
+};
+
+void read(util::in_stream& in, texcoord& t)
+{
+    t.s = in.get_float_le();
+    t.t = in.get_float_le();
+}
+
+struct vertex {
+    int16_t x, y, z; // x, y, and z coordinates in right-handed 3-space, scaled down by factor 1.0/64. (Multiply by 1.0/64 to obtain original coordinate value.)
+    uint8_t nz, na;  // Zenith and azimuth angles of normal vector. 255 corresponds to 2 pi.
+};
+
+void read(util::in_stream& in, vertex& v)
+{
+    v.x     = static_cast<int16_t>(in.get_u16_le());
+    v.y     = static_cast<int16_t>(in.get_u16_le());
+    v.z     = static_cast<int16_t>(in.get_u16_le());
+    v.nz    = in.get();
+    v.na    = in.get();
 }
 
 } } // skirmish::md3
@@ -293,8 +338,8 @@ int main()
 
         //for (const auto& f : pk3_arc.filenames()) std::cout << f << std::endl;
 
-        auto md3_stream = pk3_arc.get_file_stream("models/players/ange/lower.md3");
-        //auto md3_stream = std::make_unique<util::in_file_stream>(R"(c:\temp\md3-ange\models\players\ange\lower.md3)");
+        //auto md3_stream = pk3_arc.get_file_stream("models/players/ange/upper.md3");
+        auto md3_stream = std::make_unique<util::in_file_stream>(R"(c:\temp\md3-ange\models\players\ange\lower.md3)");
 
         md3::header h;
         read(*md3_stream, h);
@@ -304,7 +349,7 @@ int main()
         for (uint32_t i = 0; i < h.num_frames; ++i) {
             md3::frame f;
             read(*md3_stream, f);
-            std::cout << "F " << f.name << " " << f.min_bounds << " -> " << f.max_bounds << " " << f.local_origin << " " << f.radius << '\n';
+            //std::cout << "F " << f.name << " " << f.min_bounds << " -> " << f.max_bounds << " " << f.local_origin << " " << f.radius << '\n';
         }
         assert(!md3_stream->error());
 
@@ -318,7 +363,7 @@ int main()
 
         md3_stream->seek(h.ofs_surfaces, util::seekdir::beg);
         for (uint32_t i = 0; i < h.num_surfaces; ++i) {
-            std::cout << md3_stream->tell() << "\n";
+            const auto surface_start = md3_stream->tell();
             md3::surface s;
             read(*md3_stream, s);
             std::cout << "S " << s.name << "\n";
@@ -337,6 +382,42 @@ int main()
 #undef P
             std::cout << "\n";
             assert(s.check());
+
+            // Shaders
+            md3_stream->seek(surface_start + s.ofs_shaders, util::seekdir::beg);
+            for (uint32_t shader = 0; shader < s.num_shaders; ++shader) {
+                md3::shader sh;
+                read(*md3_stream, sh);
+                std::cout << "    Shader " << sh.name << " " << sh.index << "\n";
+            }
+
+            // Triangles
+            md3_stream->seek(surface_start + s.ofs_triangles, util::seekdir::beg);
+            for (uint32_t triangle = 0; triangle < s.num_triangles; ++triangle) {
+                md3::triangle t;
+                read(*md3_stream, t);
+                //std::cout << "    Tri " << t.a << " " << t.b << " " << t.c << "\n";
+            }
+
+            // Texture coordinates for all vertices
+            for (uint32_t vert_idx = 0; vert_idx < s.num_vertices; ++vert_idx) {
+                md3::texcoord st;
+                read(*md3_stream, st);
+                //std::cout << "    Tex " << st.s << " " << st.t << "\n";
+            }
+
+            // Read animation frames
+            for (uint32_t frame = 0; frame < s.num_frames; ++frame) {
+                // Which each consists of a complete set of positions + normals
+                for (uint32_t vert_idx = 0; vert_idx < s.num_vertices; ++vert_idx) {
+                    md3::vertex v;
+                    read(*md3_stream, v);
+                    //std::cout << "    V " << v.x << " " << v.y << " " << v.z << " " << (int)v.nz << " " << (int)v.na << "\n";
+                }
+            }
+
+            // Go to next surface
+            md3_stream->seek(surface_start + s.ofs_end, util::seekdir::beg);
         }
         assert(!md3_stream->error());
 
