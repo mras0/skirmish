@@ -15,6 +15,7 @@
 #include <skirmish/math/constants.h>
 #include <skirmish/util/stream.h>
 #include <skirmish/util/zip.h>
+#include <skirmish/util/path.h>
 
 #include <fstream>
 
@@ -468,6 +469,17 @@ std::unique_ptr<d3d11_simple_obj> make_obj_from_md3_surface(d3d11_renderer& rend
     return std::make_unique<d3d11_simple_obj>(renderer, util::make_array_view(vs), util::make_array_view(ts));
 }
 
+std::string simple_tolower(const util::path& p)
+{
+    std::string s = p.string();
+    for (char& c : s) {
+        if (c >= 'A' && c <= 'Z') {
+            c += 'a' - 'A';
+        }
+    }
+    return s;
+}
+
 int main()
 {
     try {
@@ -524,18 +536,15 @@ int main()
         //renderer.add_renderable(terrain_obj);
 
         std::vector<std::unique_ptr<d3d11_simple_obj>> objs;
-        util::in_file_stream pk3_stream{data_dir + "md3-mario.pk3"};
+        util::in_file_stream pk3_stream{data_dir + "md3-ange.pk3"};
         zip::in_zip_archive pk3_arc{pk3_stream};
 
-        for (const auto& f : pk3_arc.filenames()) std::cout << f << std::endl;
+        for (const auto& md3_filename : pk3_arc.filenames()) {
+            util::path p{md3_filename};
+            auto fname = simple_tolower(p.filename());
+            //std::cout << "Considering " << p << "  - " << fname << "\n";
+            if(fname != "head.md3" && fname != "lower.md3" && fname != "upper.md3") continue;
 
-        const std::vector<std::string> md3_filenames{
-            "models/players/mario/HEAD.md3",
-            "models/players/mario/LOWER.MD3",
-            "models/players/mario/UPPER.MD3"
-        };
-
-        for (const auto& md3_filename : md3_filenames) {
             std::cout << "Loading " << md3_filename << "\n";
             auto md3_stream = pk3_arc.get_file_stream(md3_filename);
 
