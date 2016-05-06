@@ -149,9 +149,9 @@ VS_OUTPUT VS( float4 Pos : POSITION /*, float4 Color : COLOR */)
     output.Pos = mul( Pos, World );
     output.Pos = mul( output.Pos, View );
     output.Pos = mul( output.Pos, Projection );
-    output.Color.rgb = Pos.z*0.5;
+    output.Color.rgb = abs(Pos.z*4);
     output.Color.a = 1;
-    output.Tex0 = float4(Pos.xy*10, 0, 0);
+    output.Tex0 = float4(Pos.xy, 0, 0);
     return output;
 }
 

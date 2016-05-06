@@ -155,6 +155,11 @@ namespace skirmish { namespace md3 {
 static constexpr uint32_t max_name_length = 64;
 static constexpr uint32_t magic           = ('3'<<24) | ('P' << 16) | ('D' << 8) | 'I';
 
+// Quake (and doom) uses 1 unit = 1 inch = 0.0254 meters
+template<typename T>
+static constexpr T quake_to_meters_v = T(0.0254);
+static constexpr auto quake_to_meters_f = quake_to_meters_v<float>;
+
 struct header {
     static constexpr uint32_t md3_version = 15;
 
@@ -316,9 +321,12 @@ void read(util::in_stream& in, texcoord& t)
 struct vertex {
     int16_t x, y, z; // x, y, and z coordinates in right-handed 3-space, scaled down by factor 1.0/64. (Multiply by 1.0/64 to obtain original coordinate value.)
     uint8_t nz, na;  // Zenith and azimuth angles of normal vector. 255 corresponds to 2 pi.
-};
 
-static constexpr float xyz_scale = 1.0f / 64.0f;
+    vec3 position() const {
+        static constexpr float xyz_scale = 1.0f / 64.0f;
+        return vec3{xyz_scale*static_cast<float>(x), xyz_scale*static_cast<float>(y), xyz_scale*static_cast<float>(z)};
+    }
+};
 
 void read(util::in_stream& in, vertex& v)
 {
@@ -445,25 +453,28 @@ bool read(util::in_stream& in, file& f)
 
 } } // skirmish::md3
 
+world_pos to_world(const md3::vec3& v) {
+    // Scale a bit since the models come out small...
+    return 2.5f * md3::quake_to_meters_f * world_pos{v.x, v.y, v.z};
+}
+
 std::unique_ptr<d3d11_simple_obj> make_obj_from_md3_surface(d3d11_renderer& renderer, const md3::surface_with_data& surf)
 {
     std::vector<world_pos> vs;
     std::vector<uint16_t>  ts;
 
-    const auto m2 = 0.05f * world_mat::identity();
-
     assert(surf.hdr.num_vertices < 65535);
     for (uint32_t i = 0; i < surf.hdr.num_vertices; ++i) {
-        vs.push_back(m2 * world_pos{surf.frames[i].x * md3::xyz_scale, surf.frames[i].y * md3::xyz_scale, surf.frames[i].z * md3::xyz_scale});
+        vs.push_back(to_world(surf.frames[i].position()));
     }
 
     for (uint32_t i = 0; i < surf.hdr.num_triangles; ++i) {
         assert(surf.triangles[i].a < surf.hdr.num_vertices);
         assert(surf.triangles[i].b < surf.hdr.num_vertices);
         assert(surf.triangles[i].c < surf.hdr.num_vertices);
-        ts.push_back(static_cast<uint16_t>(surf.triangles[i].a));
-        ts.push_back(static_cast<uint16_t>(surf.triangles[i].b));
         ts.push_back(static_cast<uint16_t>(surf.triangles[i].c));
+        ts.push_back(static_cast<uint16_t>(surf.triangles[i].b));
+        ts.push_back(static_cast<uint16_t>(surf.triangles[i].a));
     }
 
     return std::make_unique<d3d11_simple_obj>(renderer, util::make_array_view(vs), util::make_array_view(ts));
@@ -552,15 +563,12 @@ int main()
             if (!read(*md3_stream, md3_file)) {
                 throw std::runtime_error("Error loading md3 file");
             }
-
-            for (unsigned int i = 0; i < md3_file.hdr.num_surfaces; ++i) {
-                std::cout << "  " << i << " " << md3_file.surfaces[i].hdr.name << "\n";
-            }
-
             for (const auto& surf : md3_file.surfaces) {
+                std::cout << " " << surf.hdr.name << " " << surf.hdr.num_vertices << " vertices " <<  surf.hdr.num_triangles << " triangles\n";
                 objs.push_back(make_obj_from_md3_surface(renderer, surf));
                 renderer.add_renderable(*objs.back());
             }
+            std::cout << "Frame0 Bounds: " << to_world(md3_file.frames[0].min_bounds) << " " << to_world(md3_file.frames[0].max_bounds) << "\n";
         }
 
         w.on_key_down([&](key k) {
