@@ -137,6 +137,7 @@ struct VS_OUTPUT
 {
     float4 Pos : SV_POSITION;
     float4 Color : COLOR0;
+    float4 Tex0 : TEXCOORD0;
 };
 
 //--------------------------------------------------------------------------------------
@@ -148,9 +149,9 @@ VS_OUTPUT VS( float4 Pos : POSITION /*, float4 Color : COLOR */)
     output.Pos = mul( Pos, World );
     output.Pos = mul( output.Pos, View );
     output.Pos = mul( output.Pos, Projection );
-    output.Color.rgb = Pos.z;
+    output.Color.rgb = Pos.z*0.5;
     output.Color.a = 1;
-    //output.Color = Color;
+    output.Tex0 = float4(Pos.xy*10, 0, 0);
     return output;
 }
 
@@ -159,7 +160,7 @@ VS_OUTPUT VS( float4 Pos : POSITION /*, float4 Color : COLOR */)
 //--------------------------------------------------------------------------------------
 float4 PS( VS_OUTPUT input ) : SV_Target
 {
-    return the_texture.Sample(the_texture_sampler, input.Color.xy);
+    return the_texture.Sample(the_texture_sampler, input.Tex0.xy) * input.Color;
 }
 )";
 

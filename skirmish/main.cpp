@@ -536,7 +536,7 @@ int main()
         //renderer.add_renderable(terrain_obj);
 
         std::vector<std::unique_ptr<d3d11_simple_obj>> objs;
-        util::in_file_stream pk3_stream{data_dir + "md3-ange.pk3"};
+        util::in_file_stream pk3_stream{data_dir + "md3-mario.pk3"};
         zip::in_zip_archive pk3_arc{pk3_stream};
 
         for (const auto& md3_filename : pk3_arc.filenames()) {
