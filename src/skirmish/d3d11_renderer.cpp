@@ -131,13 +131,8 @@ cbuffer ConstantBuffer : register( b0 )
 
 Texture2D the_texture;
 
-const SamplerState the_texture_sampler
-{
-    Texture  = the_texture;
-    Filter   = MIN_MAG_MIP_LINEAR;
-    AddressU = Wrap;
-    AddressV = Wrap;
-};
+SamplerState the_texture_sampler;
+
 //--------------------------------------------------------------------------------------
 struct VS_OUTPUT
 {
@@ -257,6 +252,16 @@ public:
         // Create constant buffer
         constant_buffer = create_buffer(device, D3D11_BIND_CONSTANT_BUFFER, nullptr, sizeof(ConstantBuffer));
 
+        // Create sampler
+        D3D11_SAMPLER_DESC sampler_desc;
+        ZeroMemory(&sampler_desc, sizeof(sampler_desc));
+        sampler_desc.Filter   = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        sampler_desc.AddressU =  D3D11_TEXTURE_ADDRESS_WRAP;
+        sampler_desc.AddressV =  D3D11_TEXTURE_ADDRESS_WRAP;
+        sampler_desc.AddressW =  D3D11_TEXTURE_ADDRESS_WRAP;
+        device->CreateSamplerState(&sampler_desc, sampler_state.GetAddressOf());
+
+
         // This might not be a great idea?
         device->GetImmediateContext(immediate_context.GetAddressOf());
 
@@ -293,6 +298,10 @@ public:
         ID3D11ShaderResourceView* shader_resources[] = { texture_view.Get() };
         immediate_context->PSSetShaderResources(0, _countof(shader_resources), shader_resources);
 
+        // Set sampler
+        ID3D11SamplerState* sampler_states[] = { sampler_state.Get() };
+        immediate_context->PSSetSamplers(0, _countof(sampler_states), sampler_states);
+
         immediate_context->VSSetShader(vs.Get(), nullptr, 0);
         immediate_context->PSSetShader(ps.Get(), nullptr, 0);
 
@@ -321,6 +330,7 @@ private:
     ComPtr<ID3D11Buffer>             index_buffer;
     ComPtr<ID3D11Buffer>             constant_buffer;
     ComPtr<ID3D11ShaderResourceView> texture_view;
+    ComPtr<ID3D11SamplerState>       sampler_state;
     ComPtr<ID3D11DeviceContext>      immediate_context;
     UINT                             index_count;
     world_transform                  transform;
@@ -470,6 +480,7 @@ public:
         constants_.mWorld = XMMatrixTranspose(world);
         constants_.mView = XMMatrixTranspose(view);
         constants_.mProjection = XMMatrixTranspose(projection);
+
     }
 
     d3d11_create_context& create_context() {
@@ -488,11 +499,6 @@ public:
 
         // Clear depth buffer
         immediate_context_->ClearDepthStencilView(depth_stencil_view_.Get(), D3D11_CLEAR_DEPTH, 1.0f, 0);
-
-        LARGE_INTEGER freq, count;
-        QueryPerformanceFrequency(&freq);
-        QueryPerformanceCounter(&count);
-        constants_.mWorld = XMMatrixRotationZ((float)(1.5*double(count.QuadPart)/double(freq.QuadPart)));
 
         d3d11_render_context render_context {
             immediate_context_.Get(),
