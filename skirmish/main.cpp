@@ -459,12 +459,12 @@ world_pos to_world(const md3::vec3& v) {
 
 std::unique_ptr<d3d11_simple_obj> make_obj_from_md3_surface(d3d11_renderer& renderer, const md3::surface_with_data& surf)
 {
-    std::vector<world_pos> vs;
+    std::vector<simple_vertex> vs;
     std::vector<uint16_t>  ts;
 
     assert(surf.hdr.num_vertices < 65535);
     for (uint32_t i = 0; i < surf.hdr.num_vertices; ++i) {
-        vs.push_back(to_world(surf.frames[i].position()));
+        vs.push_back(simple_vertex{to_world(surf.frames[i].position()), surf.texcoords[i].s, surf.texcoords[i].t});
     }
 
     for (uint32_t i = 0; i < surf.hdr.num_triangles; ++i) {
@@ -585,7 +585,7 @@ int main()
         //renderer.add_renderable(terrain_obj);
 
         std::vector<std::unique_ptr<d3d11_simple_obj>> objs;
-        util::in_file_stream pk3_stream{data_dir + "md3-mario.pk3"};
+        util::in_file_stream pk3_stream{data_dir + "md3-ange.pk3"};
         zip::in_zip_archive pk3_arc{pk3_stream};
 
         auto process_one_md3_file = [&] (const std::string& name) {
@@ -611,9 +611,9 @@ int main()
                 objs.push_back(make_obj_from_md3_surface(renderer, surf));
                 auto it = skin_info.find(surf.hdr.name);
                 if (it != skin_info.end()) {
-                    const auto& texture_filename = it->second;
+                    const auto texture_filename = simple_tolower(util::path{it->second}.filename());
                     std::cout << " Loading texture: " << texture_filename << std::endl;
-                    auto tga_stream = pk3_arc.get_file_stream(texture_filename);
+                    auto tga_stream = pk3_arc.get_file_stream(find_in_pk3(texture_filename));
                     tga::image img;
                     if (!tga::read(*tga_stream, img)) {
                         throw std::runtime_error("Could not load TGA " + texture_filename);
@@ -671,7 +671,7 @@ int main()
         });
 
         //world_pos camera_pos{grid_scale/2.0f, grid_scale/2.0f, 2.0f};
-        world_pos camera_pos{2.0f, 2.0f, 2.0f};
+        world_pos camera_pos{1.0f, 1.0f, 1.0f};
         float view_ang = -0.5f;//-pi_f;
         w.on_paint([&] {
             view_ang += 0.0025f * (key_down[key::left] * -1 + key_down[key::right] * 1);

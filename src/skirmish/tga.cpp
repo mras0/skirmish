@@ -68,7 +68,7 @@ bool read(util::in_stream& in, image& img)
         width == 0 ||
         height == 0 ||
         img_type != image_type::uncompressed_true_color ||
-        bpp != 24) {
+        (bpp != 24 && bpp !=32)) {
         assert(!"Unsupported image features");
         return false;
     }
@@ -89,15 +89,30 @@ bool read(util::in_stream& in, image& img)
 
 std::vector<uint32_t> to_rgba(const image& img)
 {
-    assert(img.type == image_type::uncompressed_true_color && img.bpp == 24);
+    assert(img.type == image_type::uncompressed_true_color && (img.bpp == 24 || img.bpp == 32));
     const int size = img.width * img.height;
     std::vector<uint32_t> res(size);
-    for (int i = 0; i < size; ++i) {
-        const uint8_t a = 0xff;
-        const uint8_t r = img.data[i *  3 + 0];
-        const uint8_t g = img.data[i *  3 + 1];
-        const uint8_t b = img.data[i *  3 + 2];
-        res[i] = (static_cast<uint32_t>(a)<<24) | (static_cast<uint32_t>(b)<<16) | (static_cast<uint32_t>(g)<<8) | r;
+    switch (img.bpp) {
+    case 24:
+        for (int i = 0; i < size; ++i) {        
+            const uint8_t b = img.data[i *  3 + 0];
+            const uint8_t g = img.data[i *  3 + 1];
+            const uint8_t r = img.data[i *  3 + 2];
+            const uint8_t a = 0xff;
+            res[i] = (static_cast<uint32_t>(a)<<24) | (static_cast<uint32_t>(b)<<16) | (static_cast<uint32_t>(g)<<8) | r;
+        }
+        break;
+    case 32:
+        for (int i = 0; i < size; ++i) {        
+            const uint8_t b = img.data[i *  4 + 0];
+            const uint8_t g = img.data[i *  4 + 1];
+            const uint8_t r = img.data[i *  4 + 2];
+            const uint8_t a = img.data[i *  4 + 3];
+            res[i] = (static_cast<uint32_t>(a)<<24) | (static_cast<uint32_t>(b)<<16) | (static_cast<uint32_t>(g)<<8) | r;
+        }
+        break;
+    default:
+        assert(false);
     }
     return res;
 }

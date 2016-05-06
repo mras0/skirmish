@@ -31,13 +31,18 @@ private:
     std::unique_ptr<impl> impl_;
 };
 
+struct simple_vertex {
+    world_pos pos;
+    float s, t;
+};
+
 class d3d11_simple_obj : public d3d11_renderable {
 public:
-    explicit d3d11_simple_obj(d3d11_renderer& renderer, const util::array_view<world_pos>& vertices, const util::array_view<uint16_t>& indices);
+    explicit d3d11_simple_obj(d3d11_renderer& renderer, const util::array_view<simple_vertex>& vertices, const util::array_view<uint16_t>& indices);
     ~d3d11_simple_obj();
     virtual void do_render(d3d11_render_context& context) override;
 
-    void update_vertices(const util::array_view<world_pos>& vertices);
+    void update_vertices(const util::array_view<simple_vertex>& vertices);
 
     void set_texture(d3d11_texture& texture);
 

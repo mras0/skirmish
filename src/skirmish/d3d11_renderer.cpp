@@ -143,7 +143,7 @@ struct VS_OUTPUT
 //--------------------------------------------------------------------------------------
 // Vertex Shader
 //--------------------------------------------------------------------------------------
-VS_OUTPUT VS( float4 Pos : POSITION /*, float4 Color : COLOR */)
+VS_OUTPUT VS( float4 Pos : POSITION, float2 Tex : TEXCOORD0 /*, float4 Color : COLOR */)
 {
     VS_OUTPUT output = (VS_OUTPUT)0;
     output.Pos = mul( Pos, World );
@@ -151,7 +151,7 @@ VS_OUTPUT VS( float4 Pos : POSITION /*, float4 Color : COLOR */)
     output.Pos = mul( output.Pos, Projection );
     output.Color.rgb = abs(Pos.z*4);
     output.Color.a = 1;
-    output.Tex0 = float4(Pos.xy, 0, 0);
+    output.Tex0 = float4(Tex.xy, 0, 0);
     return output;
 }
 
@@ -220,7 +220,7 @@ ID3D11ShaderResourceView * d3d11_texture::view()
 
 class d3d11_simple_obj::impl {
 public:
-    explicit impl(d3d11_renderer& renderer, const util::array_view<world_pos>& vertices, const util::array_view<uint16_t>& indices) {
+    explicit impl(d3d11_renderer& renderer, const util::array_view<simple_vertex>& vertices, const util::array_view<uint16_t>& indices) {
         auto device = renderer.create_context().device;
         ComPtr<ID3DBlob> vs_blob;
         create_shader(device, shader_source, "VS", vs.GetAddressOf(), &vs_blob);
@@ -229,10 +229,13 @@ public:
         // Define the input layout
         D3D11_INPUT_ELEMENT_DESC layout[] =
         {
-            {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+            { "POSITION" , 0 , DXGI_FORMAT_R32G32B32_FLOAT , 0, 0, D3D11_INPUT_PER_VERTEX_DATA , 0 },
+            { "TEXCOORD" , 0 , DXGI_FORMAT_R32G32_FLOAT    , 0, 12, D3D11_INPUT_PER_VERTEX_DATA , 0 },
             //{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        };
+        }; // ?? use ?? D3D11_APPEND_ALIGNED_ELEMENT
         UINT numElements = ARRAYSIZE(layout);
+
+        static_assert(sizeof(simple_vertex) == 5*sizeof(float), "");
 
         // Create the input layout
         COM_CHECK(device->CreateInputLayout(layout, numElements, vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), &vertex_layout));
@@ -253,7 +256,7 @@ public:
         immediate_context->IASetInputLayout(vertex_layout.Get());
 
         // Set vertex buffer
-        UINT stride = /*sizeof(SimpleVertex)*/ 3 * sizeof(float);
+        UINT stride = sizeof(simple_vertex);
         UINT offset = 0;
         ID3D11Buffer* vertex_buffers[] = { vertex_buffer.Get() };
         immediate_context->IASetVertexBuffers(0, _countof(vertex_buffers), vertex_buffers, &stride, &offset);
@@ -274,7 +277,7 @@ public:
         immediate_context->DrawIndexed(index_count, 0, 0);
     }
 
-    void update_vertices(const util::array_view<world_pos>& vertices) {
+    void update_vertices(const util::array_view<simple_vertex>& vertices) {
         immediate_context->UpdateSubresource(vertex_buffer.Get(), 0, nullptr, vertices.data(), 0, 0);
     }
 
@@ -294,12 +297,12 @@ private:
     UINT                             index_count;
 };
 
-d3d11_simple_obj::d3d11_simple_obj(d3d11_renderer& renderer, const util::array_view<world_pos>& vertices, const util::array_view<uint16_t>& indices) : impl_(new impl{renderer, vertices, indices}) {
+d3d11_simple_obj::d3d11_simple_obj(d3d11_renderer& renderer, const util::array_view<simple_vertex>& vertices, const util::array_view<uint16_t>& indices) : impl_(new impl{renderer, vertices, indices}) {
 }
 
 d3d11_simple_obj::~d3d11_simple_obj() = default;
 
-void d3d11_simple_obj::update_vertices(const util::array_view<world_pos>& vertices) {
+void d3d11_simple_obj::update_vertices(const util::array_view<simple_vertex>& vertices) {
     impl_->update_vertices(vertices);
 }
 
