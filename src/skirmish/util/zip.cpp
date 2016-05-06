@@ -9,9 +9,9 @@ namespace skirmish { namespace zip {
 
 class in_zip_file_stream : public util::in_stream {
 public:
-    explicit in_zip_file_stream(util::in_stream& zip, bool& open, bool raw, uint64_t uncompressed_size, uint32_t crc32)
+    explicit in_zip_file_stream(util::in_stream& zip, bool& open, bool raw, size_t compressed_size, size_t uncompressed_size, uint32_t crc32)
         : zip_(zip)
-        , deflate_(raw ? nullptr : new util::in_deflate_stream{zip})
+        , deflate_(raw ? nullptr : new util::in_deflate_stream{zip, compressed_size, uncompressed_size})
         , open_(open)
         , pos_(0)
         , size_(uncompressed_size)
@@ -185,7 +185,7 @@ public:
         zip_.seek(lh.filename_length + lh.extra_field_length, util::seekdir::cur);
         assert(ch.compression_method == compression_methods::stored || ch.compression_method == compression_methods::deflated);
         open_file_ = true;
-        return std::make_unique<in_zip_file_stream>(zip_, open_file_, ch.compression_method == compression_methods::stored, ch.uncompressed_size, ch.crc32);
+        return std::make_unique<in_zip_file_stream>(zip_, open_file_, ch.compression_method == compression_methods::stored, ch.compressed_size, ch.uncompressed_size, ch.crc32);
     }
 
 private:

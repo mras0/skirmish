@@ -7,7 +7,7 @@ namespace skirmish { namespace util {
 
 class in_deflate_stream : public in_stream {
 public:
-    explicit in_deflate_stream(in_stream& inner_stream);
+    explicit in_deflate_stream(in_stream& inner_stream, size_t compressed_size, size_t uncompressed_size);
     ~in_deflate_stream();
 
     uint32_t crc32() const;

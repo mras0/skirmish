@@ -167,3 +167,43 @@ TEST_CASE("test_data.zip") {
     file_stream->get();
     REQUIRE(file_stream->error() != std::error_code());
 }
+
+#if 0
+#include <iostream>
+#include <fstream>
+
+std::string get_line(in_stream& in)
+{
+    std::string s;
+    while (!in.error()) {
+        char c = in.get();
+        if (c == '\n') break;
+        s += c;
+    }
+    return s;
+}
+
+void check(in_stream& in)
+{
+    const int N = (1<<18);
+    /*
+    std::ofstream o("big.txt", std::ofstream::binary);
+    for (int i = 0; i < N; ++i) {
+    o << i << '\n';
+    }
+    */
+    for (int i = 0; i < N; ++i) {
+        REQUIRE(get_line(in) == std::to_string(i));
+    }
+}
+
+TEST_CASE("bigger zip file") {
+    //in_file_stream in{std::string(TEST_DATA_DIR) + "/" + "big.txt"};
+    //check(in);
+
+    in_file_stream zip{std::string(TEST_DATA_DIR) + "/" + "big.zip"};
+    in_zip_archive za{zip};
+    auto fs = za.get_file_stream("big.txt");
+    check(*fs);
+}
+#endif

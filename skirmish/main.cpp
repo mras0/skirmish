@@ -293,8 +293,8 @@ int main()
 
         //for (const auto& f : pk3_arc.filenames()) std::cout << f << std::endl;
 
-        //auto md3_stream = pk3_arc.get_file_stream("models/players/ange/lower.md3");
-        auto md3_stream = std::make_unique<util::in_file_stream>(R"(c:\temp\md3-ange\models\players\ange\lower.md3)");
+        auto md3_stream = pk3_arc.get_file_stream("models/players/ange/lower.md3");
+        //auto md3_stream = std::make_unique<util::in_file_stream>(R"(c:\temp\md3-ange\models\players\ange\lower.md3)");
 
         md3::header h;
         read(*md3_stream, h);
