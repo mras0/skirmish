@@ -60,18 +60,23 @@ std::ostream& operator<<(std::ostream& os, const skirmish::vec<Size, T, tag>& v)
     return os << " )";
 }
 
-struct obj_file_contents {
-    std::vector<skirmish::world_pos> vertices;
-    std::vector<uint16_t>            indices;
+namespace skirmish { namespace obj {
+
+struct vertex {
+    double x, y, z;
 };
 
-obj_file_contents load_obj(const std::string& filename)
+struct file {
+    std::vector<vertex>   vertices;
+    std::vector<uint16_t> indices;
+};
+
+file load_obj(const std::string& filename)
 {
     auto f = open_file::text_in(filename);
     std::istream& in = f;
 
-    obj_file_contents res;
-
+    file res;
     for (std::string line; std::getline(in, line);) {
         std::istringstream iss{line};
 
@@ -126,6 +131,8 @@ obj_file_contents load_obj(const std::string& filename)
 
     return res;
 }
+
+} } // namespace skirmish::obj
 
 using namespace skirmish;
 
@@ -195,15 +202,6 @@ int main()
         util::native_file_system data_fs{data_dir};
         
         /*
-        auto bunny = load_obj(data_dir + "bunny.obj");
-
-        const auto m = 10.0f * world_mat{
-            -1, 0, 0,
-            0, 0, 1,
-            0, 1, 0};
-
-        std::transform(begin(bunny.vertices), end(bunny.vertices), begin(bunny.vertices), [&m](const auto& v) { return m * v; });
-
         constexpr int grid_size = 250;
         static_assert(grid_size * grid_size <= 65335, "Grid too large");
 
@@ -239,14 +237,22 @@ int main()
         std::map<key, bool> key_down;
 
         d3d11_renderer renderer{w};
-        //d3d11_simple_obj bunny_obj{renderer, util::make_array_view(bunny.vertices), util::make_array_view(bunny.indices)};
+
+        auto bunny = obj::load_obj(data_dir + "bunny.obj");
+        const float scale = 5.0f;
+        std::vector<simple_vertex> bunny_vertices;
+        for (const auto& bv : bunny.vertices) {
+            const auto pos = world_pos{static_cast<float>(-bv.x), static_cast<float>(bv.z), static_cast<float>(bv.y)};
+            bunny_vertices.push_back({scale*pos, 0.0f, 0.0f});
+        }
+        d3d11_simple_obj bunny_obj{renderer, util::make_array_view(bunny_vertices), util::make_array_view(bunny.indices)};
+        renderer.add_renderable(bunny_obj);
         //d3d11_simple_obj terrain_obj{renderer, util::make_array_view(vertices), util::make_array_view(indices)};
-        //renderer.add_renderable(bunny_obj);
         //renderer.add_renderable(terrain_obj);
 
         const std::string model_name = "mario";
         zip::in_zip_archive pk3_arc{data_fs.open("md3-"+model_name+".pk3")};
-        q3_player_render_obj q3player{renderer, pk3_arc, "models/players/"+model_name};
+        //q3_player_render_obj q3player{renderer, pk3_arc, "models/players/"+model_name};
 
         w.on_key_down([&](key k) {
             key_down[k] = true; 
@@ -295,7 +301,7 @@ int main()
             static auto start = clock::now();
             const auto t = std::chrono::duration_cast<std::chrono::duration<double>>(clock::now() - start).count();
             static auto last  = t;
-            q3player.update(t);
+            //q3player.update(t);
 
             view_ang += static_cast<float>((t - last) * 2.5 * (key_down[key::left] * -1 + key_down[key::right] * 1));
             world_pos view_vec{sinf(view_ang), -cosf(view_ang), 0.0f};
