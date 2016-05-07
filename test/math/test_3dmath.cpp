@@ -1,7 +1,7 @@
 #include "catch.hpp"
 #include <skirmish/math/3dmath.h>
 #include <skirmish/math/constants.h>
-#include"matvecio.h"
+#include "matvecio.h"
 
 using namespace skirmish;
 struct my_tag;

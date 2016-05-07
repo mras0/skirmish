@@ -1,5 +1,6 @@
 #include <skirmish/math/vec.h>
 #include <skirmish/math/mat.h>
+#include <skirmish/math/constants.h>
 #include "matvecio.h"
 #include <type_traits>
 #include "catch.hpp"
@@ -99,6 +100,21 @@ TEST_CASE("vec3 dot") {
     v3f a{1, 2, 3};
     v3f b{4, 5, 6};
     REQUIRE(dot(a, b) == (4+10+18));
+}
+
+TEST_CASE("vec3 lerp") {
+    v3f a{1,2,3};
+    v3f b{10,20,30};
+    REQUIRE(lerp(a, b, 0.0f) == a);
+    REQUIRE(lerp(a, b, 0.75f) == a*0.25f+b*0.75f);
+    REQUIRE(lerp(a, b, 0.5f) == a*0.5f+b*0.5f);
+    REQUIRE(lerp(a, b, 0.25f) == a*0.75f+b*0.25f);
+    REQUIRE(lerp(a, b, 1.0f) == b);
+}
+
+TEST_CASE("vec3 normalized") {
+    REQUIRE((normalized(v3f{1,0,0})) == (v3f{1,0,0}));
+    REQUIRE((normalized(v3f{2,2,0})) == (v3f{sqrt2_f/2.0f,sqrt2_f/2.0f,0}));
 }
 
 TEST_CASE("vector helpers") {

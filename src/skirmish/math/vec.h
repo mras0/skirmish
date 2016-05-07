@@ -111,6 +111,17 @@ T dot(const vec<Size, T, tag>& l, const vec<Size, T, tag>& r) {
     return res;
 }
 
+template<unsigned Size, typename T, typename tag>
+vec<Size, T, tag> lerp(const vec<Size, T, tag>& a, const vec<Size, T, tag>& b, T t) {
+    return a + (b - a) * t;
+}
+
+template<unsigned Size, typename T, typename tag>
+vec<Size, T, tag> normalized(const vec<Size, T, tag>& v) {
+    return v * (1.0f / sqrt(dot(v, v)));
+}
+
+
 } // namespace skirmish
 
 #endif

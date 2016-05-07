@@ -162,6 +162,10 @@ world_pos to_world(const md3::vec3& v) {
     return md3::quake_to_meters_f * world_pos{v.x, v.y, v.z};
 }
 
+world_normal to_world_normal(const md3::vec3& v) {
+    return world_normal{v.x, v.y, v.z};
+}
+
 std::vector<simple_vertex> vertices_from_frame(const md3::surface_with_data& surf, unsigned frame)
 {
     std::vector<simple_vertex> vs;
@@ -193,6 +197,24 @@ std::unique_ptr<d3d11_simple_obj> make_obj_from_md3_surface(d3d11_renderer& rend
 }
 
 using render_obj_vec = std::vector<std::unique_ptr<d3d11_simple_obj>>;
+
+struct animation_instant {
+    animation_instant(uint32_t start_frame, uint32_t end_frame, float sub_time) : start_frame(start_frame), end_frame(end_frame), sub_time(sub_time) {
+        assert(sub_time >= 0.0f && sub_time <= 1.0f);
+    }
+
+    uint32_t start_frame, end_frame;
+    float sub_time;
+};
+
+animation_instant calc_animation_instant(const md3::animation_info& info, double seconds_since_start)
+{
+    const double animation_pos = fmod(seconds_since_start * info.frames_per_second, info.num_frames);
+    const auto frame = static_cast<uint32_t>(animation_pos);
+    assert(frame < info.num_frames);
+    const auto next_frame = (frame + 1) % info.num_frames;
+    return { info.first_frame + frame, info.first_frame + next_frame, static_cast<float>(fmod(animation_pos, 1.0)) };
+}
 
 class md3_render_obj {
 public:
@@ -252,10 +274,19 @@ public:
         }
     }
 
-    void update_animation(uint32_t frame) {
+    void update_animation(const animation_instant& ai) {
+        assert(ai.start_frame < file_.hdr.num_frames);
+        assert(ai.end_frame < file_.hdr.num_frames);
         assert(file_.surfaces.size() == surfaces_.size());
-        for (size_t i = 0; i < surfaces_.size(); ++i) {
-            surfaces_[i]->update_vertices(util::make_array_view(vertices_from_frame(file_.surfaces[i], frame)));
+        for (size_t surfnum = 0; surfnum < surfaces_.size(); ++surfnum) {
+            auto f0 = vertices_from_frame(file_.surfaces[surfnum], ai.start_frame);
+            auto f1 = vertices_from_frame(file_.surfaces[surfnum], ai.end_frame);
+            assert(f0.size() == f1.size());
+            for (size_t vertnum = 0; vertnum < f0.size(); ++vertnum) {
+                f0[vertnum].pos = lerp(f0[vertnum].pos, f1[vertnum].pos, ai.sub_time);
+                // S and T don't change between frames
+            }
+            surfaces_[surfnum]->update_vertices(util::make_array_view(f0));
         }
     }
 
@@ -276,8 +307,33 @@ world_transform transform_from_tag(const md3::tag& tag)
         x.x, y.x, z.x, origin.x(),
         x.y, y.y, z.y, origin.y(),
         x.z, y.z, z.z, origin.z(),
-        0,   0,   0,          1
+          0,   0,   0,          1
     };
+}
+
+world_transform lerp(const md3::tag& a, const md3::tag& b, float t)
+{
+    // Linear interpolation of the individual axes and the renormalizing was good enough for quake
+    // but we might want to do slerp on quaternions later on
+    const auto origin = lerp(to_world(a.origin), to_world(b.origin), t);
+    const auto x      = normalized(lerp(to_world_normal(a.x_axis), to_world_normal(b.x_axis), t));
+    const auto y      = normalized(lerp(to_world_normal(a.y_axis), to_world_normal(b.y_axis), t));
+    const auto z      = normalized(lerp(to_world_normal(a.z_axis), to_world_normal(b.z_axis), t));
+    return world_transform {
+        x.x(), y.x(), z.x(), origin.x(),
+        x.y(), y.y(), z.y(), origin.y(),
+        x.z(), y.z(), z.z(), origin.z(),
+            0,     0,     0,          1
+    };
+}
+
+world_transform animate_tag(const md3_render_obj& obj, const animation_instant& ai, const char* tag)
+{
+#if 1
+    return lerp(obj.tag(tag, ai.start_frame), obj.tag(tag, ai.end_frame), ai.sub_time);
+#else
+    return transform_from_tag(obj.tag(tag, ai.start_frame));
+#endif
 }
 
 class q3_player_render_obj {
@@ -300,14 +356,14 @@ private:
     static constexpr const char* const torso_tag = "tag_torso";
 
     void update_transforms(const world_transform& legs_transform, double t) {
-        const auto& anim = animation_info_[md3::BOTH_DEATH2];
-        uint32_t frame   = anim.first_frame + static_cast<uint32_t>(t * anim.frames_per_second) % anim.num_frames;
+        const auto torso_ai = calc_animation_instant(animation_info_[md3::TORSO_GESTURE], t);
+        const auto legs_ai  = calc_animation_instant(animation_info_[md3::LEGS_RUN], t);
 
-        torso_.update_animation(frame);
-        legs_.update_animation(frame);
+        torso_.update_animation(torso_ai);
+        legs_.update_animation(legs_ai);
 
-        auto torso_transform = legs_transform * transform_from_tag(legs_.tag(torso_tag, frame));
-        auto head_transform  = torso_transform * transform_from_tag(torso_.tag(head_tag, frame));
+        auto torso_transform = legs_transform * animate_tag(legs_, legs_ai, torso_tag);
+        auto head_transform  = torso_transform * animate_tag(torso_, torso_ai, head_tag);
         head_.set_transform(head_transform);
         torso_.set_transform(torso_transform);
         legs_.set_transform(legs_transform);
@@ -404,7 +460,7 @@ int main()
         //renderer.add_renderable(bunny_obj);
         //renderer.add_renderable(terrain_obj);
 
-        const std::string model_name = "ange";
+        const std::string model_name = "thor";
         zip::in_zip_archive pk3_arc{data_fs.open("md3-"+model_name+".pk3")};
         q3_player_render_obj q3player{renderer, pk3_arc, "models/players/"+model_name};
 

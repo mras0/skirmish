@@ -241,6 +241,13 @@ animation_info_array read_animation_cfg(util::in_stream& in)
     if (index != MAX_ANIMATION) {
         throw std::runtime_error("Invalid number of animations in animation.cfg: "  + std::to_string(index));
     }
+
+    // From Q3 source: leg only frames are adjusted to not count the upper body only frames
+    // Note: calculate adjustment outside the loop as we clobber animations[LEGS_WALKCR] on the first iteration
+    const auto legs_frame_adjustment = animations[LEGS_WALKCR].first_frame - animations[TORSO_GESTURE].first_frame;
+    for (unsigned index = LEGS_WALKCR; index < MAX_ANIMATION; ++index) {
+        animations[index].first_frame -= legs_frame_adjustment;
+    }
     return animations;
 }
 
