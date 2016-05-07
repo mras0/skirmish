@@ -6,6 +6,7 @@ add_executable(test_util
     test_deflate_stream.cpp
     test_zip.cpp
     test_fs.cpp
+    test_text.cpp
     ${CATCH_MAIN_CPP})
 target_link_libraries(test_util skirmish_util)
 add_test(test_util test_util)

@@ -13,6 +13,8 @@ add_library(skirmish_util
     perlin.h
     stream.cpp
     stream.h
+    text.cpp
+    text.h
     tga.cpp
     tga.h
     zip.cpp
