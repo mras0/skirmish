@@ -235,8 +235,7 @@ public:
         return file_;
     }
 
-    const md3::tag& tag(const std::string& name) const {
-        const uint32_t frame = 0;
+    const md3::tag& tag(const std::string& name, uint32_t frame) const {
         assert(frame < file_.hdr.num_frames);
         for (unsigned i = 0; i < file_.hdr.num_tags; ++i) {
             const auto& t = file_.tags[frame * file_.hdr.num_tags + i];
@@ -244,12 +243,19 @@ public:
                 return t;
             }
         }
-        throw std::runtime_error("Tag " + name + " not found");
+        throw std::runtime_error("Tag " + name + " not found for frame " + std::to_string(frame));
     }
 
     void set_transform(const world_transform& transform) {
         for (auto& s : surfaces_) {
             s->set_world_transform(transform);
+        }
+    }
+
+    void update_animation(uint32_t frame) {
+        assert(file_.surfaces.size() == surfaces_.size());
+        for (size_t i = 0; i < surfaces_.size(); ++i) {
+            surfaces_[i]->update_vertices(util::make_array_view(vertices_from_frame(file_.surfaces[i], frame)));
         }
     }
 
@@ -267,42 +273,50 @@ world_transform transform_from_tag(const md3::tag& tag)
     auto z      = tag.z_axis;
 
     return world_transform {
-        x.x, x.y, x.z, origin.x(),
-        y.x, y.y, y.z, origin.y(),
-        z.x, z.y, z.z, origin.z(),
-          0,   0,   0,          1
+        x.x, y.x, z.x, origin.x(),
+        x.y, y.y, z.y, origin.y(),
+        x.z, y.z, z.z, origin.z(),
+        0,   0,   0,          1
     };
 }
 
 class q3_player_render_obj {
 public:
-    explicit q3_player_render_obj(d3d11_renderer& renderer, util::file_system& fs, const std::string& model_name)
-        : head_ (renderer, fs, "models/players/" + model_name + "/" +  + "head")
-        , torso_(renderer, fs, "models/players/" + model_name + "/" +  + "upper")
-        , legs_ (renderer, fs, "models/players/" + model_name + "/" +  + "lower") {
+    explicit q3_player_render_obj(d3d11_renderer& renderer, util::file_system& fs, const std::string& base_path)
+        : head_ (renderer, fs, base_path + "/head")
+        , torso_(renderer, fs, base_path + "/upper")
+        , legs_ (renderer, fs, base_path + "/lower")
+        , animation_info_(md3::read_animation_cfg(*fs.open(base_path + "/animation.cfg"))) {
     }
 
     void update(double t) {
         auto rot = world_transform::factory::rotation_z(static_cast<float>(t * 2.2f));
-        auto legs_transform  = rot*world_transform::factory::translation({0.0f,0.0f, 0.0f}); //world_transform::identity();
-        update_transforms(legs_transform);
+        auto legs_transform  = rot*world_transform::factory::translation({0.0f,0.0f, 0.0f}); 
+        update_transforms(legs_transform, t);
     }
 
 private:
     static constexpr const char* const head_tag  = "tag_head";
     static constexpr const char* const torso_tag = "tag_torso";
 
-    void update_transforms(const world_transform& legs_transform) {
-        auto torso_transform = legs_transform * transform_from_tag(legs_.tag(torso_tag));
-        auto head_transform  = torso_transform * transform_from_tag(torso_.tag(head_tag));
+    void update_transforms(const world_transform& legs_transform, double t) {
+        const auto& anim = animation_info_[md3::BOTH_DEATH2];
+        uint32_t frame   = anim.first_frame + static_cast<uint32_t>(t * anim.frames_per_second) % anim.num_frames;
+
+        torso_.update_animation(frame);
+        legs_.update_animation(frame);
+
+        auto torso_transform = legs_transform * transform_from_tag(legs_.tag(torso_tag, frame));
+        auto head_transform  = torso_transform * transform_from_tag(torso_.tag(head_tag, frame));
         head_.set_transform(head_transform);
         torso_.set_transform(torso_transform);
         legs_.set_transform(legs_transform);
     }
 
-    md3_render_obj head_;
-    md3_render_obj torso_;
-    md3_render_obj legs_;
+    md3_render_obj              head_;
+    md3_render_obj              torso_;
+    md3_render_obj              legs_;
+    md3::animation_info_array   animation_info_;
 };
 
 /*
@@ -392,7 +406,7 @@ int main()
 
         const std::string model_name = "ange";
         zip::in_zip_archive pk3_arc{data_fs.open("md3-"+model_name+".pk3")};
-        q3_player_render_obj q3player{renderer, pk3_arc, model_name};
+        q3_player_render_obj q3player{renderer, pk3_arc, "models/players/"+model_name};
 
         w.on_key_down([&](key k) {
             key_down[k] = true; 

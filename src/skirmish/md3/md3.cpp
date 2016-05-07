@@ -2,6 +2,7 @@
 #include <skirmish/util/text.h>
 #include <cassert>
 #include <algorithm>
+#include <sstream>
 
 namespace skirmish { namespace md3 {
 
@@ -219,5 +220,29 @@ skin_info_type read_skin(util::in_stream& in)
     }
     return res;
 }
+
+animation_info_array read_animation_cfg(util::in_stream& in)
+{
+    std::array<animation_info, MAX_ANIMATION> animations{};
+    unsigned index = 0;
+    for (std::string line; !in.error() && in.tell() < in.stream_size(); ) {
+        read_line(in, line);
+        line = util::trim(line);
+        if (line.empty() || line[0] < '0' || line[0] > '9') continue;
+        if (index == MAX_ANIMATION) {
+            throw std::runtime_error("Invalid number of animations in animation.cfg");
+        }
+        animation_info& a = animations[index++];
+        std::istringstream iss{line};
+        if (!(iss >> a.first_frame >> a.num_frames >> a.looping_frames >> a.frames_per_second)) {
+            throw std::runtime_error("Invalid line in animation.cfg: '" + line + "'");
+        }
+    }
+    if (index != MAX_ANIMATION) {
+        throw std::runtime_error("Invalid number of animations in animation.cfg: "  + std::to_string(index));
+    }
+    return animations;
+}
+
 
 } } // skirmish::md3

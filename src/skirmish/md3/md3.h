@@ -4,6 +4,7 @@
 #include <skirmish/util/stream.h>
 #include <vector>
 #include <map>
+#include <array>
 
 namespace skirmish { namespace md3 {
 
@@ -144,6 +145,45 @@ bool read(util::in_stream& in, file& f);
 
 using skin_info_type = std::map<std::string, std::string>;
 skin_info_type read_skin(util::in_stream& in);
+
+enum animation_index {
+    BOTH_DEATH1,
+    BOTH_DEAD1,
+    BOTH_DEATH2,
+    BOTH_DEAD2,
+    BOTH_DEATH3,
+    BOTH_DEAD3,
+    TORSO_GESTURE,
+    TORSO_ATTACK,
+    TORSO_ATTACK2,
+    TORSO_DROP,
+    TORSO_RAISE,
+    TORSO_STAND,
+    TORSO_STAND2,
+    LEGS_WALKCR,
+    LEGS_WALK,
+    LEGS_RUN,
+    LEGS_BACK,
+    LEGS_SWIM,
+    LEGS_JUMP,
+    LEGS_LAND,
+    LEGS_JUMPB,
+    LEGS_LANDB,
+    LEGS_IDLE,
+    LEGS_IDLECR,
+    LEGS_TURN,
+    MAX_ANIMATION,
+};
+
+struct animation_info {
+    uint32_t first_frame;
+    uint32_t num_frames;
+    uint32_t looping_frames;
+    uint32_t frames_per_second;
+};
+
+using animation_info_array = std::array<animation_info, MAX_ANIMATION>;
+animation_info_array read_animation_cfg(util::in_stream& in);
 
 } } // skirmish::md3
 
