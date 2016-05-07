@@ -13,8 +13,12 @@ namespace skirmish {
 //
 
 template<unsigned Rows, unsigned Columns, typename T, typename tag>
+struct matrix_factory;
+
+template<unsigned Rows, unsigned Columns, typename T, typename tag>
 struct mat {
-    using row_type = vec<Columns, T, tag>;
+    using factory      = matrix_factory<Rows, Columns, T, tag>;
+    using row_type     = vec<Columns, T, tag>;
     row_type rows[Rows];
 
     row_type& operator[](unsigned r) {

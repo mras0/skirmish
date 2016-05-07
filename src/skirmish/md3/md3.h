@@ -3,6 +3,7 @@
 
 #include <skirmish/util/stream.h>
 #include <vector>
+#include <map>
 
 namespace skirmish { namespace md3 {
 
@@ -140,6 +141,9 @@ struct file {
 };
 
 bool read(util::in_stream& in, file& f);
+
+using skin_info_type = std::map<std::string, std::string>;
+skin_info_type read_skin(util::in_stream& in);
 
 } } // skirmish::md3
 

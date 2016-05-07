@@ -201,4 +201,46 @@ bool read(util::in_stream& in, file& f)
     return !in.error();
 }
 
+std::string trim(const std::string& in)
+{
+    const char* whitespace = "\t\r\n\v ";
+    const auto first = in.find_first_not_of(whitespace);
+    const auto last  = in.find_last_not_of(whitespace);
+    return first != last ? in.substr(first, last-first+1) : "";
+}
+
+skin_info_type read_skin(util::in_stream& in)
+{
+    assert(trim("") == "");
+    assert(trim("\r\n") == "");
+    assert(trim("bl ah \tblah") == "bl ah \tblah");
+    assert(trim("  \n\r\tbl ah \tblah") == "bl ah \tblah");
+    assert(trim("bl ah \tblah  \n\t") == "bl ah \tblah");
+    assert(trim("    bl ah \tblah  \n\t") == "bl ah \tblah");
+
+    std::string skin_data(in.stream_size(), '\0');
+    in.read(&skin_data[0], skin_data.size());
+    if (in.error()) {
+        throw std::runtime_error("Error reading skin data");
+    }
+
+    skin_info_type res;
+    for (size_t pos = 0, size = skin_data.size(); pos < size;) {
+        const auto next_eol =  skin_data.find_first_of('\n', pos);
+        auto line = skin_data.substr(pos, next_eol-pos);
+        const auto comma_pos = line.find_first_of(',');
+        if (comma_pos == 0 || comma_pos == std::string::npos) throw std::runtime_error("Invalid skin line: '" + line +"'");
+        auto mesh_name = trim(line.substr(0, comma_pos));
+        auto texture_filename = trim(line.substr(comma_pos + 1));
+
+        if (!res.insert({std::move(mesh_name), std::move(texture_filename)}).second) {
+            throw std::runtime_error("Invalid skin file: '" + mesh_name + "' defined more than once");
+        }
+
+        pos = next_eol == std::string::npos ? next_eol : next_eol+1;
+    }
+
+    return res;
+}
+
 } } // skirmish::md3
