@@ -5,6 +5,7 @@
 #include <sstream>
 #include <map>
 #include <algorithm>
+#include <chrono>
 #include <stdint.h>
 #include <cassert>
 
@@ -258,61 +259,50 @@ private:
     render_obj_vec      surfaces_;
 };
 
-world_transform transform_from_tag(const md3::tag& tag, bool inverse)
+world_transform transform_from_tag(const md3::tag& tag)
 {
-    // TODO: use orientation
     auto origin = to_world(tag.origin);
-    if (inverse) {
-        origin = -origin;
-    }
-    return world_transform::factory::translation(origin);
+    auto x      = tag.x_axis;
+    auto y      = tag.y_axis;
+    auto z      = tag.z_axis;
+
+    return world_transform {
+        x.x, x.y, x.z, origin.x(),
+        y.x, y.y, y.z, origin.y(),
+        z.x, z.y, z.z, origin.z(),
+          0,   0,   0,          1
+    };
 }
 
 class q3_player_render_obj {
 public:
     explicit q3_player_render_obj(d3d11_renderer& renderer, util::file_system& fs, const std::string& model_name)
         : head_ (renderer, fs, "models/players/" + model_name + "/" +  + "head")
-        , upper_(renderer, fs, "models/players/" + model_name + "/" +  + "upper")
-        , lower_(renderer, fs, "models/players/" + model_name + "/" +  + "lower") {
+        , torso_(renderer, fs, "models/players/" + model_name + "/" +  + "upper")
+        , legs_ (renderer, fs, "models/players/" + model_name + "/" +  + "lower") {
+    }
 
-        auto pr = [](const auto& f) {
-            std::cout << "Num frames: " << f.hdr.num_frames << std::endl;
-            for (unsigned tag = 0; tag < f.hdr.num_tags; ++tag) {
-                const auto& t = f.tags[tag];
-                std::cout << t.name << " " << t.origin << std::endl;
-            }
-        };
-        std::cout << "Head\n";
-        pr(head_.file());
-        std::cout << "\nUpper\n";
-        pr(upper_.file());
-        std::cout << "\nLower\n";
-        pr(lower_.file());
-
-        head_.set_transform(head_transform());
-        upper_.set_transform(upper_transform());
-        lower_.set_transform(lower_transform());
+    void update(double t) {
+        auto rot = world_transform::factory::rotation_z(static_cast<float>(t * 2.2f));
+        auto legs_transform  = rot*world_transform::factory::translation({0.0f,0.0f, 0.0f}); //world_transform::identity();
+        update_transforms(legs_transform);
     }
 
 private:
     static constexpr const char* const head_tag  = "tag_head";
     static constexpr const char* const torso_tag = "tag_torso";
 
-    world_transform head_transform() const {
-        return transform_from_tag(upper_.tag(head_tag), false);
-    }
-
-    world_transform upper_transform() const {
-        return world_transform::identity();
-    }
-
-    world_transform lower_transform() const {
-        return transform_from_tag(lower_.tag(torso_tag), true);
+    void update_transforms(const world_transform& legs_transform) {
+        auto torso_transform = legs_transform * transform_from_tag(legs_.tag(torso_tag));
+        auto head_transform  = torso_transform * transform_from_tag(torso_.tag(head_tag));
+        head_.set_transform(head_transform);
+        torso_.set_transform(torso_transform);
+        legs_.set_transform(legs_transform);
     }
 
     md3_render_obj head_;
-    md3_render_obj upper_;
-    md3_render_obj lower_;
+    md3_render_obj torso_;
+    md3_render_obj legs_;
 };
 
 /*
@@ -400,7 +390,7 @@ int main()
         //renderer.add_renderable(bunny_obj);
         //renderer.add_renderable(terrain_obj);
 
-        const std::string model_name = "mario";
+        const std::string model_name = "ange";
         zip::in_zip_archive pk3_arc{data_fs.open("md3-"+model_name+".pk3")};
         q3_player_render_obj q3player{renderer, pk3_arc, model_name};
 
@@ -444,16 +434,22 @@ int main()
         });
 
         //world_pos camera_pos{grid_scale/2.0f, grid_scale/2.0f, 2.0f};
-        world_pos camera_pos{1.0f, 1.0f, 1.0f};
-        float view_ang = -0.5f;//-pi_f;
+        world_pos camera_pos{2.0f, 0.0f, 1.0f};
+        float view_ang = -pi_f/2.0f;//-pi_f;
         w.on_paint([&] {
-            view_ang += 0.0025f * (key_down[key::left] * -1 + key_down[key::right] * 1);
+            using clock = std::chrono::high_resolution_clock;
+            static auto start = clock::now();
+            const auto t = std::chrono::duration_cast<std::chrono::duration<double>>(clock::now() - start).count();
+            static auto last  = t;
+            q3player.update(t);
+
+            view_ang += static_cast<float>((t - last) * 2.5 * (key_down[key::left] * -1 + key_down[key::right] * 1));
             world_pos view_vec{sinf(view_ang), -cosf(view_ang), 0.0f};
 
-            camera_pos += view_vec * (0.01f * (key_down[key::up] * 1 + key_down[key::down] * -1));
+            camera_pos += view_vec * static_cast<float>((t - last) * 5 * (key_down[key::up] * 1 + key_down[key::down] * -1));
 
             auto camera_target = camera_pos + view_vec;
-            camera_target[2] = 0;
+            camera_target[2] = 0.5f;
 
             std::ostringstream oss;
             oss << camera_pos << " " << camera_target << " viewdir: " << view_ang;
@@ -461,6 +457,7 @@ int main()
 
             renderer.set_view(camera_pos, camera_target);
             renderer.render();
+            last = t;
         });
         w.show();
 
