@@ -1,6 +1,7 @@
 #include <skirmish/util/stream.h>
 #include <skirmish/util/zip_internals.h>
 #include <skirmish/util/zip.h>
+#include <skirmish/util/file_stream.h>
 #include "catch.hpp"
 #include <vector>
 #include <cassert>
@@ -25,7 +26,7 @@ TEST_CASE("empty.zip") {
     REQUIRE(r.comment_length == 0);
 
     in_zip_archive za{empty_zip};
-    REQUIRE(za.filenames() == (std::vector<std::string>{}));
+    REQUIRE(za.file_list() == (std::vector<path>{}));
 }
 
 TEST_CASE("test.zip") {
@@ -102,8 +103,8 @@ TEST_CASE("test.zip") {
     REQUIRE(file_data == (std::vector<uint8_t>{0xf3, 0xc9, 0xcc, 0x4b, 0x55, 0x30, 0xe4, 0xf2, 0x01, 0x51, 0x46, 0x5c, 0x00}));
 
     in_zip_archive za{test_zip};
-    REQUIRE(za.filenames() == (std::vector<std::string>{"test.txt"}));
-    auto file_stream = za.get_file_stream("test.txt");
+    REQUIRE(za.file_list() == (std::vector<path>{"test.txt"}));
+    auto file_stream = za.open("test.txt");
     REQUIRE(file_stream->stream_size() == 14);
     char buffer[14];
     file_stream->read(buffer, sizeof(buffer));
@@ -129,7 +130,7 @@ TEST_CASE("test_data.zip") {
     REQUIRE(dir_end.central_disk == 0);
     REQUIRE(dir_end.central_directory_size_bytes >= central_directory_file_header::min_size_bytes);
 
-    std::vector<std::string> filenames;
+    std::vector<path> filenames;
     zip.seek(dir_end.central_directory_offset, seekdir::beg);
     while (zip.tell() < dir_end.central_directory_offset + dir_end.central_directory_size_bytes) {
         central_directory_file_header cdfh;
@@ -151,13 +152,13 @@ TEST_CASE("test_data.zip") {
             filenames.push_back(filename);
         }
     }
-    const auto expected_filenames = std::vector<std::string>{"test_data/empty.zip", "test_data/test.txt", "test_data/test.zip"};
+    const auto expected_filenames = std::vector<path>{"test_data/empty.zip", "test_data/test.txt", "test_data/test.zip"};
     REQUIRE(filenames == expected_filenames);
 
     in_zip_archive za{zip};
-    REQUIRE(za.filenames() == expected_filenames);
+    REQUIRE(za.file_list() == expected_filenames);
 
-    auto file_stream = za.get_file_stream("test_data/test.txt");
+    auto file_stream = za.open("test_data/test.txt");
     REQUIRE(file_stream->stream_size() == 14);
     char buffer[14];
     file_stream->read(buffer, sizeof(buffer));

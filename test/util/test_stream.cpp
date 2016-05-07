@@ -1,4 +1,5 @@
 #include <skirmish/util/stream.h>
+#include <skirmish/util/file_stream.h>
 #include "catch.hpp"
 #include <vector>
 #include <iterator>

@@ -10,13 +10,13 @@
 
 #include <skirmish/win32_main_window.h>
 #include <skirmish/d3d11_renderer.h>
-#include <skirmish/perlin.h>
-#include <skirmish/tga.h>
 #include <skirmish/math/constants.h>
 #include <skirmish/util/stream.h>
+#include <skirmish/util/file_stream.h>
 #include <skirmish/util/zip.h>
 #include <skirmish/util/path.h>
-
+#include <skirmish/util/perlin.h>
+#include <skirmish/util/tga.h>
 #include <fstream>
 
 class open_file {
@@ -497,7 +497,7 @@ std::string simple_tolower(const util::path& p)
     return s;
 }
 
-std::string find_file(const std::vector<std::string>& haystack, const std::string& needle)
+util::path find_file(const std::vector<util::path>& haystack, const std::string& needle)
 {
     for (const auto& candidate : haystack) {
         if (simple_tolower(util::path{candidate}.filename()) == needle) {
@@ -596,16 +596,16 @@ int main()
         zip::in_zip_archive pk3_arc{pk3_stream};
 
         auto process_one_md3_file = [&] (const std::string& name, const world_pos& initial_pos) {
-            const auto& pk3_files = pk3_arc.filenames();
+            const auto& pk3_files = pk3_arc.file_list();
             auto find_in_pk3 = [&pk3_files](const std::string& filename) { return find_file(pk3_files, filename); };        
 
             const auto skin_filename =  find_in_pk3(name + "_default.skin");
             std::cout << "Loading " << skin_filename << "\n";
-            auto skin_info = read_skin(*pk3_arc.get_file_stream(skin_filename));
+            auto skin_info = read_skin(*pk3_arc.open(skin_filename));
 
             const auto md3_filename = find_in_pk3(name + ".md3");
             std::cout << "Loading " << md3_filename << "\n";
-            auto md3_stream = pk3_arc.get_file_stream(md3_filename);
+            auto md3_stream = pk3_arc.open(md3_filename);
 
             md3::file md3_file;
             if (!read(*md3_stream, md3_file)) {
@@ -620,7 +620,7 @@ int main()
                 if (it != skin_info.end()) {
                     const auto texture_filename = simple_tolower(util::path{it->second}.filename());
                     std::cout << " Loading texture: " << texture_filename << std::endl;
-                    auto tga_stream = pk3_arc.get_file_stream(find_in_pk3(texture_filename));
+                    auto tga_stream = pk3_arc.open(find_in_pk3(texture_filename));
                     tga::image img;
                     if (!tga::read(*tga_stream, img)) {
                         throw std::runtime_error("Could not load TGA " + texture_filename);

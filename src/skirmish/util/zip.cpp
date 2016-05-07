@@ -143,24 +143,24 @@ public:
         }
     }
 
-    std::vector<std::string> filenames() const {
-        std::vector<std::string> res;
+    std::vector<util::path> file_list() const {
+        std::vector<util::path> res;
         for (const auto& f: files_) {
             res.push_back(f.first);
         }
         return res;
     }
 
-    std::unique_ptr<util::in_stream> get_file_stream(const std::string& filename) {
+    std::unique_ptr<util::in_stream> open(const util::path& filename) {
         assert(!zip_.error());
         if (open_file_) {
             assert(false);
             throw std::runtime_error("Only one file can be open at a time");
         }
 
-        auto it = files_.find(filename);
+        auto it = files_.find(filename.generic_u8string());
         if (it == files_.end()) {
-            throw std::runtime_error(filename + " not found in zip archive");
+            throw std::runtime_error(filename.generic_u8string() + " not found in zip archive");
         }
 
         const auto& ch = it->second;
@@ -168,7 +168,7 @@ public:
         local_file_header lh;
         read(zip_, lh);
         if (zip_.error() || lh.signature != local_file_header::signature_magic) {
-            throw std::runtime_error("Could not read local file header for " + filename);
+            throw std::runtime_error("Could not read local file header for " + filename.generic_u8string());
         }
 
         if (ch.min_version != lh.min_version ||
@@ -180,7 +180,7 @@ public:
             ch.compressed_size != lh.compressed_size ||
             ch.uncompressed_size != lh.uncompressed_size ||
             ch.filename_length != lh.filename_length) {
-            throw std::runtime_error("Local and central file headers differ for " + filename);
+            throw std::runtime_error("Local and central file headers differ for " + filename.generic_u8string());
         }
         // TODO: Could check filenames as well here...
         zip_.seek(lh.filename_length + lh.extra_field_length, util::seekdir::cur);
@@ -202,14 +202,14 @@ in_zip_archive::in_zip_archive(util::in_stream& in) : impl_(new impl{in})
 
 in_zip_archive::~in_zip_archive() = default;
 
-std::vector<std::string> in_zip_archive::filenames() const
+std::vector<util::path> in_zip_archive::do_file_list() const
 {
-    return impl_->filenames();
+    return impl_->file_list();
 }
 
-std::unique_ptr<util::in_stream> in_zip_archive::get_file_stream(const std::string& filename)
+std::unique_ptr<util::in_stream> in_zip_archive::do_open(const util::path& filename)
 {
-    return impl_->get_file_stream(filename);
+    return impl_->open(filename);
 }
 
 } } // namespace skirmish::zip
