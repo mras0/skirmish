@@ -173,7 +173,7 @@ std::vector<simple_vertex> vertices_from_frame(const md3::surface_with_data& sur
     assert(frame < surf.hdr.num_frames);
     const uint32_t offset = frame*surf.hdr.num_vertices;
     for (uint32_t i = 0; i < surf.hdr.num_vertices; ++i) {
-        vs.push_back(simple_vertex{to_world(surf.frames[offset+i].position()), surf.texcoords[i].s, surf.texcoords[i].t});
+        vs.push_back(simple_vertex{to_world(surf.frames[offset+i].position()), surf.texcoords[i].s, -surf.texcoords[i].t});
     }
     return vs;
 }
