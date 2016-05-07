@@ -36,7 +36,7 @@ using namespace skirmish;
 
 auto calc_grid(int grid_size, float prescale, float grid_scale, float persistence, int number_of_octaves)
 {
-    std::vector<world_pos> vertices(grid_size * grid_size);
+    std::vector<simple_vertex> vertices(grid_size * grid_size);
     std::vector<uint8_t> height_map(grid_size * grid_size);
     for (int y = 0; y < grid_size; ++y) {
         for (int x = 0; x < grid_size; ++x) {
@@ -52,7 +52,9 @@ auto calc_grid(int grid_size, float prescale, float grid_scale, float persistenc
             }
 #endif
             height_map[index] = static_cast<uint8_t>(255.0f * fz);
-            vertices[index] = world_pos{fx*grid_scale, fy*grid_scale, fz};
+            vertices[index].pos = world_pos{fx*grid_scale, fy*grid_scale, fz};
+            vertices[index].s = fx;
+            vertices[index].t = fy;
         }
     }
     //tga::write_grayscale(open_file::binary_out("height.tga"), grid_size, grid_size, height_map.data());
@@ -77,7 +79,6 @@ int main()
     try {
         util::native_file_system data_fs{"../../data/"};
         
-        /*
         constexpr int grid_size = 250;
         static_assert(grid_size * grid_size <= 65335, "Grid too large");
 
@@ -87,7 +88,7 @@ int main()
         int number_of_octaves = 9;
         float prescale = grid_scale;
 
-        std::vector<world_pos> vertices;
+        std::vector<simple_vertex> vertices;
 
         auto recalc_grid = [&] {
             std::cout << "calc_grid(grid_size=" << grid_size << ", prescale=" << prescale << ", grid_scale=" << grid_scale << ", persistence=" << persistence << ", number_of_octaves=" << number_of_octaves << "\n";
@@ -107,7 +108,7 @@ int main()
                 indices.push_back(static_cast<uint16_t>(idx+grid_size));
                 indices.push_back(static_cast<uint16_t>(idx));
             }
-        }*/
+        }
 
         win32_main_window w{640, 480};
         std::map<key, bool> key_down;
@@ -116,8 +117,12 @@ int main()
         auto bunny = load_obj_for_render(renderer, *data_fs.open("bunny.obj"));
         bunny->set_world_transform(world_transform::factory::translation({1,1,0}));
         renderer.add_renderable(*bunny);
-        //d3d11_simple_obj terrain_obj{renderer, util::make_array_view(vertices), util::make_array_view(indices)};
-        //renderer.add_renderable(terrain_obj);
+        d3d11_simple_obj terrain_obj{renderer, util::make_array_view(vertices), util::make_array_view(indices)};
+        // Create default white 1x1 texture
+        static const uint32_t terrain_tex[] = { 0xffffffff, 0xff0000ff, 0xff00ff00, 0xffff0000} ;
+        d3d11_texture tex(renderer, util::make_array_view(terrain_tex), 2, 2);
+        terrain_obj.set_texture(tex);
+        renderer.add_renderable(terrain_obj);
 
         const std::string model_name = "mario";
         zip::in_zip_archive pk3_arc{data_fs.open("md3-"+model_name+".pk3")};
