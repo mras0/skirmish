@@ -120,8 +120,12 @@ uint64_t in_deflate_stream::do_stream_size() const
 
 void in_deflate_stream::do_seek(int64_t offset, seekdir way)
 {
-    assert(way == seekdir::cur && offset >= 0 && static_cast<uint64_t>(offset) <= peek().size());
-    set_cursor(peek().begin() + offset);
+    if (way == seekdir::cur && offset >= 0 && static_cast<uint64_t>(offset) <= peek().size()) {
+        set_cursor(peek().begin() + offset);
+    } else {
+        assert(false);
+        set_failed(std::make_error_code(std::errc::invalid_seek));
+    }
 }
 
 uint64_t in_deflate_stream::do_tell() const

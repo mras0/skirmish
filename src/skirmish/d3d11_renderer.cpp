@@ -150,7 +150,7 @@ VS_OUTPUT VS( float4 Pos : POSITION, float2 Tex : TEXCOORD0 /*, float4 Color : C
     output.Pos = mul( Pos, World );
     output.Pos = mul( output.Pos, View );
     output.Pos = mul( output.Pos, Projection );
-    output.Color.rgb = abs(Pos.z*4);
+    output.Color.rgb = 1;//abs(Pos.z*4);
     output.Color.a = 1;
     output.Tex0 = float4(Tex.xy, 0, 0);
     return output;
@@ -231,10 +231,10 @@ public:
         // Define the input layout
         D3D11_INPUT_ELEMENT_DESC layout[] =
         {
-            { "POSITION" , 0 , DXGI_FORMAT_R32G32B32_FLOAT , 0, 0, D3D11_INPUT_PER_VERTEX_DATA , 0 },
-            { "TEXCOORD" , 0 , DXGI_FORMAT_R32G32_FLOAT    , 0, 12, D3D11_INPUT_PER_VERTEX_DATA , 0 },
+            { "POSITION" , 0 , DXGI_FORMAT_R32G32B32_FLOAT , 0, 0                            , D3D11_INPUT_PER_VERTEX_DATA , 0 },
+            { "TEXCOORD" , 0 , DXGI_FORMAT_R32G32_FLOAT    , 0, D3D11_APPEND_ALIGNED_ELEMENT , D3D11_INPUT_PER_VERTEX_DATA , 0 },
             //{"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        }; // ?? use ?? D3D11_APPEND_ALIGNED_ELEMENT
+        };
         UINT numElements = ARRAYSIZE(layout);
 
         static_assert(sizeof(simple_vertex) == 5*sizeof(float), "");

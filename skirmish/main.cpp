@@ -209,7 +209,8 @@ struct animation_instant {
 
 animation_instant calc_animation_instant(const md3::animation_info& info, double seconds_since_start)
 {
-    const double animation_pos = fmod(seconds_since_start * info.frames_per_second, info.num_frames);
+    // XXX: We don't respect the fact that many animations don't actually loop
+    const auto animation_pos = fmod(seconds_since_start * info.frames_per_second, info.num_frames);
     const auto frame = static_cast<uint32_t>(animation_pos);
     assert(frame < info.num_frames);
     const auto next_frame = (frame + 1) % info.num_frames;
@@ -234,7 +235,7 @@ public:
         skin_info_ = md3::read_skin(*fs.open(skin_filename));
 
         for (const auto& surf : file_.surfaces) {
-            std::cout << " " << surf.hdr.name << " " << surf.hdr.num_vertices << " vertices " <<  surf.hdr.num_triangles << " triangles\n";
+            std::cout << " Surface " << surf.hdr.name << " " << surf.hdr.num_vertices << " vertices " <<  surf.hdr.num_triangles << " triangles\n";
             surfaces_.push_back(make_obj_from_md3_surface(renderer, surf));
 
             auto it = skin_info_.find(surf.hdr.name);
@@ -296,20 +297,6 @@ private:
     render_obj_vec      surfaces_;
 };
 
-world_transform transform_from_tag(const md3::tag& tag)
-{
-    auto origin = to_world(tag.origin);
-    auto x      = tag.x_axis;
-    auto y      = tag.y_axis;
-    auto z      = tag.z_axis;
-
-    return world_transform {
-        x.x, y.x, z.x, origin.x(),
-        x.y, y.y, z.y, origin.y(),
-        x.z, y.z, z.z, origin.z(),
-          0,   0,   0,          1
-    };
-}
 
 world_transform lerp(const md3::tag& a, const md3::tag& b, float t)
 {
@@ -329,11 +316,7 @@ world_transform lerp(const md3::tag& a, const md3::tag& b, float t)
 
 world_transform animate_tag(const md3_render_obj& obj, const animation_instant& ai, const char* tag)
 {
-#if 1
     return lerp(obj.tag(tag, ai.start_frame), obj.tag(tag, ai.end_frame), ai.sub_time);
-#else
-    return transform_from_tag(obj.tag(tag, ai.start_frame));
-#endif
 }
 
 class q3_player_render_obj {
@@ -346,7 +329,7 @@ public:
     }
 
     void update(double t) {
-        auto rot = world_transform::factory::rotation_z(static_cast<float>(t * 2.2f));
+        auto rot = world_transform::factory::rotation_z(static_cast<float>(t * 3));
         auto legs_transform  = rot*world_transform::factory::translation({0.0f,0.0f, 0.0f}); 
         update_transforms(legs_transform, t);
     }
@@ -356,8 +339,8 @@ private:
     static constexpr const char* const torso_tag = "tag_torso";
 
     void update_transforms(const world_transform& legs_transform, double t) {
-        const auto torso_ai = calc_animation_instant(animation_info_[md3::TORSO_GESTURE], t);
-        const auto legs_ai  = calc_animation_instant(animation_info_[md3::LEGS_RUN], t);
+        const auto torso_ai = calc_animation_instant(animation_info_[md3::TORSO_ATTACK], t);
+        const auto legs_ai  = calc_animation_instant(animation_info_[md3::LEGS_WALK], t);
 
         torso_.update_animation(torso_ai);
         legs_.update_animation(legs_ai);
@@ -460,7 +443,7 @@ int main()
         //renderer.add_renderable(bunny_obj);
         //renderer.add_renderable(terrain_obj);
 
-        const std::string model_name = "thor";
+        const std::string model_name = "mario";
         zip::in_zip_archive pk3_arc{data_fs.open("md3-"+model_name+".pk3")};
         q3_player_render_obj q3player{renderer, pk3_arc, "models/players/"+model_name};
 
