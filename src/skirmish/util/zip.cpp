@@ -7,6 +7,20 @@
 
 namespace skirmish { namespace zip {
 
+struct zip_path_compare {
+    static constexpr char crude_transform(char c) {
+        return c >= 'A' && c <= 'Z' ?  c + 'a' - 'A' : static_cast<unsigned char>(c) > 0x7f ? 0x7f : c;
+    }
+    static std::string crude_transform(const util::path& p) {
+        std::string s = p.generic_u8string();
+        for (auto& c : s) c = crude_transform(c);
+        return s;
+    }
+    bool operator()(const util::path& l, const util::path& r) const {
+        return crude_transform(l) < crude_transform(r);
+    }
+};
+
 class in_zip_file_stream : public util::in_stream {
 public:
     explicit in_zip_file_stream(util::in_stream& zip, bool& open, bool raw, size_t compressed_size, size_t uncompressed_size, uint32_t crc32)
@@ -96,7 +110,69 @@ private:
 
 class in_zip_archive::impl {
 public:
-    explicit impl(util::in_stream& in) : zip_(in), open_file_(false) {
+    explicit impl(util::in_stream& in) : owned_stream_(), zip_(in) {
+        initialize();
+    }
+    
+    explicit impl(std::unique_ptr<util::in_stream> owned_stream) : owned_stream_(std::move(owned_stream)), zip_(*owned_stream_) {
+        initialize();
+    }
+
+    std::vector<util::path> file_list() const {
+        std::vector<util::path> res;
+        for (const auto& f: files_) {
+            res.push_back(f.first);
+        }
+        return res;
+    }
+
+    std::unique_ptr<util::in_stream> open(const util::path& filename) {
+        assert(!zip_.error());
+        if (open_file_) {
+            assert(false);
+            throw std::runtime_error("Only one file can be open at a time");
+        }
+
+        auto it = files_.find(filename);
+        if (it == files_.end()) {
+            throw std::runtime_error(filename.generic_u8string() + " not found in zip archive");
+        }
+
+        const auto& ch = it->second;
+        zip_.seek(ch.local_file_header_offset, util::seekdir::beg);
+        local_file_header lh;
+        read(zip_, lh);
+        if (zip_.error() || lh.signature != local_file_header::signature_magic) {
+            throw std::runtime_error("Could not read local file header for " + filename.generic_u8string());
+        }
+
+        if (ch.min_version != lh.min_version ||
+            ch.flags != lh.flags ||
+            ch.compression_method != lh.compression_method ||
+            ch.last_modified_time != lh.last_modified_time ||
+            ch.last_modified_date != lh.last_modified_date ||
+            ch.crc32 != lh.crc32 ||
+            ch.compressed_size != lh.compressed_size ||
+            ch.uncompressed_size != lh.uncompressed_size ||
+            ch.filename_length != lh.filename_length) {
+            throw std::runtime_error("Local and central file headers differ for " + filename.generic_u8string());
+        }
+        // TODO: Could check filenames as well here...
+        zip_.seek(lh.filename_length + lh.extra_field_length, util::seekdir::cur);
+        assert(ch.compression_method == compression_methods::stored || ch.compression_method == compression_methods::deflated);
+        open_file_ = true;
+        return std::make_unique<in_zip_file_stream>(zip_, open_file_, ch.compression_method == compression_methods::stored, ch.compressed_size, ch.uncompressed_size, ch.crc32);
+    }
+
+private:
+    using file_map_type = std::map<util::path, central_directory_file_header, zip_path_compare>;
+    std::unique_ptr<util::in_stream> owned_stream_;
+    util::in_stream&                 zip_;
+    end_of_central_directory_record  dir_end_;
+    file_map_type                    files_;
+    bool                             open_file_ = false;
+
+    void initialize() {
         if (zip_.error()) {
             throw std::system_error(zip_.error(), "Invalid ZIP stream");
         }
@@ -133,7 +209,7 @@ public:
             if (!is_dir) {
                 const auto ir = files_.insert({std::move(filename), central_header});
                 if (!ir.second) {
-                    throw std::runtime_error("Duplicate filename in zip: " + ir.first->first);
+                    throw std::runtime_error("Duplicate filename in zip: " + ir.first->first.generic_u8string());
                 }
             }
         }
@@ -142,61 +218,13 @@ public:
             throw std::runtime_error("Error while reading zip central directory");
         }
     }
-
-    std::vector<util::path> file_list() const {
-        std::vector<util::path> res;
-        for (const auto& f: files_) {
-            res.push_back(f.first);
-        }
-        return res;
-    }
-
-    std::unique_ptr<util::in_stream> open(const util::path& filename) {
-        assert(!zip_.error());
-        if (open_file_) {
-            assert(false);
-            throw std::runtime_error("Only one file can be open at a time");
-        }
-
-        auto it = files_.find(filename.generic_u8string());
-        if (it == files_.end()) {
-            throw std::runtime_error(filename.generic_u8string() + " not found in zip archive");
-        }
-
-        const auto& ch = it->second;
-        zip_.seek(ch.local_file_header_offset, util::seekdir::beg);
-        local_file_header lh;
-        read(zip_, lh);
-        if (zip_.error() || lh.signature != local_file_header::signature_magic) {
-            throw std::runtime_error("Could not read local file header for " + filename.generic_u8string());
-        }
-
-        if (ch.min_version != lh.min_version ||
-            ch.flags != lh.flags ||
-            ch.compression_method != lh.compression_method ||
-            ch.last_modified_time != lh.last_modified_time ||
-            ch.last_modified_date != lh.last_modified_date ||
-            ch.crc32 != lh.crc32 ||
-            ch.compressed_size != lh.compressed_size ||
-            ch.uncompressed_size != lh.uncompressed_size ||
-            ch.filename_length != lh.filename_length) {
-            throw std::runtime_error("Local and central file headers differ for " + filename.generic_u8string());
-        }
-        // TODO: Could check filenames as well here...
-        zip_.seek(lh.filename_length + lh.extra_field_length, util::seekdir::cur);
-        assert(ch.compression_method == compression_methods::stored || ch.compression_method == compression_methods::deflated);
-        open_file_ = true;
-        return std::make_unique<in_zip_file_stream>(zip_, open_file_, ch.compression_method == compression_methods::stored, ch.compressed_size, ch.uncompressed_size, ch.crc32);
-    }
-
-private:
-    util::in_stream&                                        zip_;
-    end_of_central_directory_record                         dir_end_;
-    std::map<std::string, central_directory_file_header>    files_;
-    bool                                                    open_file_;
 };
 
 in_zip_archive::in_zip_archive(util::in_stream& in) : impl_(new impl{in})
+{
+}
+
+in_zip_archive::in_zip_archive(std::unique_ptr<util::in_stream> in) : impl_(new impl{std::move(in)})
 {
 }
 
@@ -212,4 +240,4 @@ std::unique_ptr<util::in_stream> in_zip_archive::do_open(const util::path& filen
     return impl_->open(filename);
 }
 
-} } // namespace skirmish::zip
+} } // namespace skirmish::zipu

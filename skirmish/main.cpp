@@ -17,6 +17,7 @@
 #include <skirmish/util/path.h>
 #include <skirmish/util/perlin.h>
 #include <skirmish/util/tga.h>
+#include <skirmish/md3/md3.h>
 #include <fstream>
 
 class open_file {
@@ -150,308 +151,10 @@ auto calc_grid(int grid_size, float prescale, float grid_scale, float persistenc
     return vertices;
 };
 
-namespace skirmish { namespace md3 {
-
-static constexpr uint32_t max_name_length = 64;
-static constexpr uint32_t magic           = ('3'<<24) | ('P' << 16) | ('D' << 8) | 'I';
-
-// Quake (and doom) uses 1 unit = 1 inch = 0.0254 meters
-template<typename T>
-static constexpr T quake_to_meters_v = T(0.0254);
-static constexpr auto quake_to_meters_f = quake_to_meters_v<float>;
-
-struct header {
-    static constexpr uint32_t md3_version = 15;
-
-    static constexpr uint32_t max_frames   = 1024;
-    static constexpr uint32_t max_tags     = 16;
-    static constexpr uint32_t max_surfaces = 32;
-
-    uint32_t ident; // IDP3
-    uint32_t version;
-    char     name[max_name_length];
-    uint32_t flags;
-    uint32_t num_frames;
-    uint32_t num_tags;
-    uint32_t num_surfaces;
-    uint32_t num_skins;
-    uint32_t ofs_frames;
-    uint32_t ofs_tags;
-    uint32_t ofs_surfaces;
-    uint32_t ofs_end;
-
-    bool check() const {
-        return ident == magic && version == md3_version && num_frames < max_frames && num_tags < max_tags && num_surfaces < max_surfaces;
-    }
-};
-
-void read(util::in_stream& in, header& h)
-{
-    h.ident        = in.get_u32_le();
-    h.version      = in.get_u32_le();
-    in.read(h.name, sizeof(h.name));
-    h.flags        = in.get_u32_le();
-    h.num_frames   = in.get_u32_le();
-    h.num_tags     = in.get_u32_le();
-    h.num_surfaces = in.get_u32_le();
-    h.num_skins    = in.get_u32_le();
-    h.ofs_frames   = in.get_u32_le();
-    h.ofs_tags     = in.get_u32_le();
-    h.ofs_surfaces = in.get_u32_le();
-    h.ofs_end      = in.get_u32_le();
-}
-
-struct vec3 {
-    float x, y, z;
-};
-
-void read(util::in_stream& in, vec3& v)
-{
-    v.x = in.get_float_le();
-    v.y = in.get_float_le();
-    v.z = in.get_float_le();
-}
-
-std::ostream& operator<<(std::ostream& os, const vec3& v)
+std::ostream& operator<<(std::ostream& os, const md3::vec3& v)
 {
     return os << "( " << v.x << ", " << v.y << ", " << v.z << ")";
 }
-
-struct frame {
-    vec3    min_bounds;
-    vec3    max_bounds;
-    vec3    local_origin;
-    float   radius;
-    char    name[16];
-};
-
-void read(util::in_stream& in, frame& f)
-{
-    read(in, f.min_bounds);
-    read(in, f.max_bounds);
-    read(in, f.local_origin);
-    f.radius = in.get_float_le();
-    in.read(f.name, sizeof(f.name));
-}
-
-struct tag {
-    char name[max_name_length];
-    vec3 origin;
-    vec3 x_axis;
-    vec3 y_axis;
-    vec3 z_axis;
-};
-
-void read(util::in_stream& in, tag& t)
-{
-    in.read(t.name, sizeof(t.name));
-    read(in, t.origin);
-    read(in, t.x_axis);
-    read(in, t.y_axis);
-    read(in, t.z_axis);
-}
-
-struct surface {
-    uint32_t ident;
-    char     name[max_name_length];
-    uint32_t flags;
-    uint32_t num_frames;
-    uint32_t num_shaders;
-    uint32_t num_vertices;
-    uint32_t num_triangles;
-    uint32_t ofs_triangles;
-    uint32_t ofs_shaders;
-    uint32_t ofs_st;
-    uint32_t ofs_xyznormals;
-    uint32_t ofs_end;
-
-    bool check() const {
-        return ident == magic;
-    }
-};
-
-void read(util::in_stream& in, surface& s)
-{
-    s.ident          = in.get_u32_le();
-    in.read(s.name, sizeof(s.name));
-    s.flags          = in.get_u32_le();
-    s.num_frames     = in.get_u32_le();
-    s.num_shaders    = in.get_u32_le();
-    s.num_vertices   = in.get_u32_le();
-    s.num_triangles  = in.get_u32_le();
-    s.ofs_triangles  = in.get_u32_le();
-    s.ofs_shaders    = in.get_u32_le();
-    s.ofs_st         = in.get_u32_le();
-    s.ofs_xyznormals = in.get_u32_le();
-    s.ofs_end        = in.get_u32_le();
-}
-
-struct shader {
-    char     name[max_name_length];
-    uint32_t index;
-};
-
-void read(util::in_stream& in, shader& s)
-{
-    in.read(s.name, sizeof(s.name));
-    s.index = in.get_u32_le();
-}
-
-struct triangle {
-    uint32_t a, b, c;
-};
-
-void read(util::in_stream& in, triangle& t)
-{
-    t.a = in.get_u32_le();
-    t.b = in.get_u32_le();
-    t.c = in.get_u32_le();
-}
-
-struct texcoord {
-    float s, t;
-};
-
-void read(util::in_stream& in, texcoord& t)
-{
-    t.s = in.get_float_le();
-    t.t = in.get_float_le();
-}
-
-struct vertex {
-    int16_t x, y, z; // x, y, and z coordinates in right-handed 3-space, scaled down by factor 1.0/64. (Multiply by 1.0/64 to obtain original coordinate value.)
-    uint8_t nz, na;  // Zenith and azimuth angles of normal vector. 255 corresponds to 2 pi.
-
-    vec3 position() const {
-        static constexpr float xyz_scale = 1.0f / 64.0f;
-        return vec3{xyz_scale*static_cast<float>(x), xyz_scale*static_cast<float>(y), xyz_scale*static_cast<float>(z)};
-    }
-};
-
-void read(util::in_stream& in, vertex& v)
-{
-    v.x     = static_cast<int16_t>(in.get_u16_le());
-    v.y     = static_cast<int16_t>(in.get_u16_le());
-    v.z     = static_cast<int16_t>(in.get_u16_le());
-    v.nz    = in.get();
-    v.na    = in.get();
-}
-
-struct surface_with_data {
-    surface               hdr;
-    std::vector<shader>   shaders;
-    std::vector<triangle> triangles;
-    std::vector<texcoord> texcoords;
-    std::vector<vertex>   frames;
-};
-
-template<typename T>
-bool read_to_vec(util::in_stream& in, std::vector<T>& v, uint64_t abs_stream_offset, uint32_t count)
-{
-    in.seek(abs_stream_offset, util::seekdir::beg);
-    v.resize(count);
-    for (auto& e : v) {
-        read(in, e);
-    }
-    return !in.error();
-}
-
-bool read(util::in_stream& in, surface_with_data& s)
-{
-    const auto surface_start = in.tell();
-    
-    // Header
-    read(in, s.hdr);
-    if (in.error() || !s.hdr.check()) return false;
-
-    // Read in the order the elements appear in the file to avoid seeking backwards
-    enum element { e_shaders, e_triangles, e_texcoords, e_frames };
-    std::pair<element, uint32_t> elements[] = {
-        { e_shaders   , s.hdr.ofs_shaders    },
-        { e_triangles , s.hdr.ofs_triangles  },
-        { e_texcoords , s.hdr.ofs_st         },
-        { e_frames    , s.hdr.ofs_xyznormals }
-    };
-    std::sort(std::begin(elements), std::end(elements), [](const auto& l, const auto& r) { return l.second < r.second; });
-
-    for (const auto& e : elements) {
-        switch (e.first) {
-        case e_shaders:
-            if (!read_to_vec(in, s.shaders, surface_start + s.hdr.ofs_shaders, s.hdr.num_shaders)) {
-                assert(false);
-                return false;
-            }
-            break;
-
-        case e_triangles:
-            if (!read_to_vec(in, s.triangles, surface_start + s.hdr.ofs_triangles, s.hdr.num_triangles)) {
-                assert(false);
-                return false;
-            }
-            break;
-
-        case e_texcoords:
-            if (!read_to_vec(in, s.texcoords, surface_start + s.hdr.ofs_st, s.hdr.num_vertices)) {
-                assert(false);
-                return false;
-            }
-            break;
-        case e_frames:
-            // Frames (each frame consists of 'num_vertices' vertices)
-            if (!read_to_vec(in, s.frames, surface_start + s.hdr.ofs_xyznormals, s.hdr.num_frames * s.hdr.num_vertices)) {
-                assert(false);
-                return false;
-            }
-            break;
-        }
-    }
-
-    // Go to next surface
-    in.seek(surface_start + s.hdr.ofs_end, util::seekdir::beg);
-
-    return !in.error();
-}
-
-struct file {
-    header                          hdr;
-    std::vector<frame>              frames;
-    std::vector<tag>                tags;
-    std::vector<surface_with_data>  surfaces;
-};
-
-bool read(util::in_stream& in, file& f)
-{
-    // Header
-    read(in, f.hdr);
-    if (in.error() || !f.hdr.check()) {
-        return false;
-    }
-    assert(!f.hdr.num_skins);
-
-    // Frames
-    if (!read_to_vec(in, f.frames, f.hdr.ofs_frames, f.hdr.num_frames)) {
-        assert(false);
-        return false;
-    }
-
-    // Tags
-    if (!read_to_vec(in, f.tags, f.hdr.ofs_tags, f.hdr.num_tags)) {
-        assert(false);
-        return false;
-    }
-
-    // Surfaces
-    if (!read_to_vec(in, f.surfaces, f.hdr.ofs_surfaces, f.hdr.num_surfaces)) {
-        assert(false);
-        return false;
-    }
-
-    // TODO: Verify that the number of frames in each surfaces matches the global value etc.
-
-    return !in.error();
-}
-
-} } // skirmish::md3
 
 world_pos to_world(const md3::vec3& v) {
     return md3::quake_to_meters_f * world_pos{v.x, v.y, v.z};
@@ -478,6 +181,7 @@ std::unique_ptr<d3d11_simple_obj> make_obj_from_md3_surface(d3d11_renderer& rend
         assert(surf.triangles[i].a < surf.hdr.num_vertices);
         assert(surf.triangles[i].b < surf.hdr.num_vertices);
         assert(surf.triangles[i].c < surf.hdr.num_vertices);
+        // Note: reverse order because quake is right-handed
         ts.push_back(static_cast<uint16_t>(surf.triangles[i].c));
         ts.push_back(static_cast<uint16_t>(surf.triangles[i].b));
         ts.push_back(static_cast<uint16_t>(surf.triangles[i].a));
@@ -507,8 +211,24 @@ util::path find_file(const std::vector<util::path>& haystack, const std::string&
     throw std::runtime_error("Could not find " + needle);
 }
 
-std::map<std::string, std::string> read_skin(util::in_stream& in)
+std::string trim(const std::string& in)
 {
+    const char* whitespace = "\t\r\n\v ";
+    const auto first = in.find_first_not_of(whitespace);
+    const auto last  = in.find_last_not_of(whitespace);
+    return first != last ? in.substr(first, last-first+1) : "";
+}
+
+using skin_info_type = std::map<std::string, std::string>;
+skin_info_type read_skin(util::in_stream& in)
+{
+    assert(trim("") == "");
+    assert(trim("\r\n") == "");
+    assert(trim("bl ah \tblah") == "bl ah \tblah");
+    assert(trim("  \n\r\tbl ah \tblah") == "bl ah \tblah");
+    assert(trim("bl ah \tblah  \n\t") == "bl ah \tblah");
+    assert(trim("    bl ah \tblah  \n\t") == "bl ah \tblah");
+
     std::string skin_data(in.stream_size(), '\0');
     in.read(&skin_data[0], skin_data.size());
     if (in.error()) {
@@ -519,12 +239,10 @@ std::map<std::string, std::string> read_skin(util::in_stream& in)
     for (size_t pos = 0, size = skin_data.size(); pos < size;) {
         const auto next_eol =  skin_data.find_first_of('\n', pos);
         auto line = skin_data.substr(pos, next_eol-pos);
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        //std::cout << "Line: " << line << '\n';
         const auto comma_pos = line.find_first_of(',');
         if (comma_pos == 0 || comma_pos == std::string::npos) throw std::runtime_error("Invalid skin line: '" + line +"'");
-        auto mesh_name = line.substr(0, comma_pos);
-        auto texture_filename = line.substr(comma_pos + 1);
+        auto mesh_name = trim(line.substr(0, comma_pos));
+        auto texture_filename = trim(line.substr(comma_pos + 1));
 
         if (!res.insert({std::move(mesh_name), std::move(texture_filename)}).second) {
             throw std::runtime_error("Invalid skin file: '" + mesh_name + "' defined more than once");
@@ -536,10 +254,52 @@ std::map<std::string, std::string> read_skin(util::in_stream& in)
     return res;
 }
 
+void process_one_md3_file(d3d11_renderer& renderer, std::vector<std::unique_ptr<d3d11_simple_obj>>& objs, util::file_system& fs, const std::string& name, const world_pos& initial_pos) {
+    const auto& pk3_files = fs.file_list();
+    auto find_in_pk3 = [&pk3_files](const std::string& filename) { return find_file(pk3_files, filename); };        
+
+    const auto skin_filename =  find_in_pk3(name + "_default.skin");
+    std::cout << "Loading " << skin_filename << "\n";
+    auto skin_info = read_skin(*fs.open(skin_filename));
+
+    const auto md3_filename = find_in_pk3(name + ".md3");
+    std::cout << "Loading " << md3_filename << "\n";
+
+    md3::file md3_file;
+    if (!read(*fs.open(md3_filename), md3_file)) {
+        throw std::runtime_error("Error loading md3 file");
+    }
+
+    for (const auto& surf : md3_file.surfaces) {
+        std::cout << " " << surf.hdr.name << " " << surf.hdr.num_vertices << " vertices " <<  surf.hdr.num_triangles << " triangles\n";
+        objs.push_back(make_obj_from_md3_surface(renderer, surf));
+        auto it = skin_info.find(surf.hdr.name);
+        if (it != skin_info.end()) {
+            const auto texture_filename = it->second;
+            std::cout << " Loading texture: " << texture_filename << std::endl;
+            tga::image img;
+            if (!tga::read(*fs.open(texture_filename), img)) {
+                throw std::runtime_error("Could not load TGA " + texture_filename);
+            }
+            std::cout << "  " << img.width << " x " << img.height << std::endl;
+            d3d11_texture tex(renderer, util::make_array_view(tga::to_rgba(img)), img.width, img.height);
+            objs.back()->set_texture(tex);
+        }
+        auto world_mat = world_transform::identity();
+        world_mat[0][3] = initial_pos.x();
+        world_mat[1][3] = initial_pos.y();
+        world_mat[2][3] = initial_pos.z();
+        objs.back()->set_world_transform(world_mat);
+        renderer.add_renderable(*objs.back());
+    }
+    std::cout << " Frame0 Bounds: " << to_world(md3_file.frames[0].max_bounds) << " " << to_world(md3_file.frames[0].min_bounds) << "\n";
+}
+
 int main()
 {
     try {
         const std::string data_dir = "../../data/";
+        util::native_file_system data_fs{data_dir};
         
         /*
         auto bunny = load_obj(data_dir + "bunny.obj");
@@ -592,56 +352,14 @@ int main()
         //renderer.add_renderable(terrain_obj);
 
         std::vector<std::unique_ptr<d3d11_simple_obj>> objs;
-        util::in_file_stream pk3_stream{data_dir + "md3-ange.pk3"};
-        zip::in_zip_archive pk3_arc{pk3_stream};
 
-        auto process_one_md3_file = [&] (const std::string& name, const world_pos& initial_pos) {
-            const auto& pk3_files = pk3_arc.file_list();
-            auto find_in_pk3 = [&pk3_files](const std::string& filename) { return find_file(pk3_files, filename); };        
+        const std::string model_name = "thor";
 
-            const auto skin_filename =  find_in_pk3(name + "_default.skin");
-            std::cout << "Loading " << skin_filename << "\n";
-            auto skin_info = read_skin(*pk3_arc.open(skin_filename));
-
-            const auto md3_filename = find_in_pk3(name + ".md3");
-            std::cout << "Loading " << md3_filename << "\n";
-            auto md3_stream = pk3_arc.open(md3_filename);
-
-            md3::file md3_file;
-            if (!read(*md3_stream, md3_file)) {
-                throw std::runtime_error("Error loading md3 file");
-            }
-            md3_stream.reset();
-
-            for (const auto& surf : md3_file.surfaces) {
-                std::cout << " " << surf.hdr.name << " " << surf.hdr.num_vertices << " vertices " <<  surf.hdr.num_triangles << " triangles\n";
-                objs.push_back(make_obj_from_md3_surface(renderer, surf));
-                auto it = skin_info.find(surf.hdr.name);
-                if (it != skin_info.end()) {
-                    const auto texture_filename = simple_tolower(util::path{it->second}.filename());
-                    std::cout << " Loading texture: " << texture_filename << std::endl;
-                    auto tga_stream = pk3_arc.open(find_in_pk3(texture_filename));
-                    tga::image img;
-                    if (!tga::read(*tga_stream, img)) {
-                        throw std::runtime_error("Could not load TGA " + texture_filename);
-                    }
-                    std::cout << "  " << img.width << " x " << img.height << std::endl;
-                    d3d11_texture tex(renderer, util::make_array_view(tga::to_rgba(img)), img.width, img.height);
-                    objs.back()->set_texture(tex);
-                }
-                auto world_mat = world_transform::identity();
-                world_mat[0][3] = initial_pos.x();
-                world_mat[1][3] = initial_pos.y();
-                world_mat[2][3] = initial_pos.z();
-                objs.back()->set_world_transform(world_mat);
-                renderer.add_renderable(*objs.back());
-            }
-            std::cout << " Frame0 Bounds: " << to_world(md3_file.frames[0].max_bounds) << " " << to_world(md3_file.frames[0].min_bounds) << "\n";
-        };
+        zip::in_zip_archive pk3_arc{data_fs.open("md3-"+model_name+".pk3")};
         
-        process_one_md3_file("head", {0.0f,0.0f,0.5f});
-        process_one_md3_file("upper", {0.0f,0.0f,0.0f});
-        process_one_md3_file("lower", {0.0f,0.0f,-0.5f});
+        process_one_md3_file(renderer, objs, pk3_arc, "head", {0.0f,0.0f,0.5f});
+        process_one_md3_file(renderer, objs, pk3_arc, "upper", {0.0f,0.0f,0.0f});
+        process_one_md3_file(renderer, objs, pk3_arc, "lower", {0.0f,0.0f,-0.5f});
 
         w.on_key_down([&](key k) {
             key_down[k] = true; 

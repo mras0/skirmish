@@ -29,6 +29,11 @@ TEST_CASE("empty.zip") {
     REQUIRE(za.file_list() == (std::vector<path>{}));
 }
 
+TEST_CASE("Owning constructor") {
+    in_zip_archive za{native_file_system{TEST_DATA_DIR}.open("empty.zip")};
+    REQUIRE(za.file_list().empty());
+}
+
 TEST_CASE("test.zip") {
     in_file_stream test_zip{(std::string{TEST_DATA_DIR} + "/" + "test.zip").c_str()};
 

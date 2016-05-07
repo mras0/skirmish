@@ -11,6 +11,7 @@ namespace skirmish { namespace zip {
 class in_zip_archive : public util::file_system {
 public:
     explicit in_zip_archive(util::in_stream& in);
+    explicit in_zip_archive(std::unique_ptr<util::in_stream> in);
     ~in_zip_archive();
 
 private:

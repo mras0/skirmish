@@ -18,6 +18,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "/MT /O2 /DNDEBUG")
 # Always include debug information
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Zi /Zo")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /DEBUG")
+set(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} /ignore:4221") # warning LNK4221: This object file does not define any previously undefined public symbols, so it will not be used by any link operation that consumes this library
 
 add_definitions("/W4")
 #add_definitions("/wd4127") # C4127: conditional expression is constant
