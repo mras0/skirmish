@@ -17,39 +17,11 @@
 #include <skirmish/util/path.h>
 #include <skirmish/util/perlin.h>
 #include <skirmish/util/tga.h>
+#include <skirmish/obj/obj.h>
 #include <skirmish/md3/md3.h>
 #include <skirmish/win32/win32_main_window.h>
 #include <skirmish/win32/d3d11_renderer.h>
 #include <skirmish/win32/q3_player_render_obj.h>
-#include <fstream>
-
-class open_file {
-public:
-    static open_file text_in(const std::string& filename) {
-        return open_file{filename, std::ios_base::in};
-    }
-
-    static open_file binary_out(const std::string& filename) {
-        return open_file{filename, std::ios_base::binary | std::ios_base::out};
-    }
-
-    operator std::istream&() {
-        return s_;
-    }
-
-    operator std::ostream&() {
-        return s_;
-    }
-
-private:
-    explicit open_file(const std::string& filename, std::ios_base::openmode mode) : s_{filename.c_str(), mode} {
-        if (!s_) {
-            throw std::runtime_error("Could not open '" + filename + "'");
-        }
-    }
-
-    std::fstream s_;
-};
 
 template<unsigned Size, typename T, typename tag>
 std::ostream& operator<<(std::ostream& os, const skirmish::vec<Size, T, tag>& v) {
@@ -59,80 +31,6 @@ std::ostream& operator<<(std::ostream& os, const skirmish::vec<Size, T, tag>& v)
     }
     return os << " )";
 }
-
-namespace skirmish { namespace obj {
-
-struct vertex {
-    double x, y, z;
-};
-
-struct file {
-    std::vector<vertex>   vertices;
-    std::vector<uint16_t> indices;
-};
-
-file load_obj(const std::string& filename)
-{
-    auto f = open_file::text_in(filename);
-    std::istream& in = f;
-
-    file res;
-    for (std::string line; std::getline(in, line);) {
-        std::istringstream iss{line};
-
-        auto err = [&] (const std::string& msg) {
-            throw std::runtime_error("Invalid obj file '" + filename + "'. Line: '" + line + "'. Error: " + msg);
-        };
-
-        char element;
-        if (!(iss >> element)) {
-            err("Empty line");
-        }
-        if (element == '#') { // comment
-            continue;
-        } else if (element == 'v') { // geometric vertex 
-            float x, y, z;
-            if (!(iss >> x >> y >> z)) {
-                err("Incomplete vertex line");
-            }
-            float w;
-            if ((iss >> w) && w != 1.0f) {
-                err("w != 1 not supported");
-            }
-            res.vertices.push_back({x, y, z});
-        } else if (element == 'f') { // Polygonal face element
-            unsigned long long a, b, c;
-            if (!(iss >> a >> b >> c)) {
-                err("Incomplete polygonal face line");
-            }
-            unsigned long long d;
-            if (iss >> d) {
-                err("Only triangles supported");
-            }
-
-            if (a == 0 || b == 0 || c == 0) {
-                err("Invalid indices");
-            }
-            a--;
-            b--;
-            c--;
-            
-            if (a > UINT16_MAX || b > UINT16_MAX || c > UINT16_MAX) {
-                err("Only 16-bit indices supported");
-            }
-
-            res.indices.push_back(static_cast<uint16_t>(a));
-            res.indices.push_back(static_cast<uint16_t>(b));
-            res.indices.push_back(static_cast<uint16_t>(c));
-        } else {
-            err("Unknown element found");
-        }
-    }
-
-    return res;
-}
-
-} } // namespace skirmish::obj
 
 using namespace skirmish;
 
@@ -157,49 +55,27 @@ auto calc_grid(int grid_size, float prescale, float grid_scale, float persistenc
             vertices[index] = world_pos{fx*grid_scale, fy*grid_scale, fz};
         }
     }
-    tga::write_grayscale(open_file::binary_out("height.tga"), grid_size, grid_size, height_map.data());
+    //tga::write_grayscale(open_file::binary_out("height.tga"), grid_size, grid_size, height_map.data());
     return vertices;
 };
 
-std::ostream& operator<<(std::ostream& os, const md3::vec3& v)
+std::unique_ptr<d3d11_simple_obj> load_obj_for_render(d3d11_renderer& renderer, util::in_stream& in)
 {
-    return os << "( " << v.x << ", " << v.y << ", " << v.z << ")";
-}
-
-/*
-void process_one_md3_file(d3d11_renderer& renderer, std::vector<std::unique_ptr<d3d11_simple_obj>>& objs, util::file_system& fs, const util::path& name, const world_pos& initial_pos) {
-    md3_object md3_obj;
-    read_md3_object(fs, md3_obj, name);
-
-    for (const auto& surf : md3_obj.f.surfaces) {
-        std::cout << " " << surf.hdr.name << " " << surf.hdr.num_vertices << " vertices " <<  surf.hdr.num_triangles << " triangles\n";
-        objs.push_back(make_obj_from_md3_surface(renderer, surf));
-        const auto texture_filename = md3_obj.surface_texture(surf.hdr.name);        
-        if (!texture_filename.empty()) {
-            std::cout << " Loading texture: " << texture_filename << std::endl;
-            tga::image img;
-            if (!tga::read(*fs.open(texture_filename), img)) {
-                throw std::runtime_error("Could not load TGA " + texture_filename);
-            }
-            std::cout << "  " << img.width << " x " << img.height << std::endl;
-            d3d11_texture tex(renderer, util::make_array_view(tga::to_rgba(img)), img.width, img.height);
-            objs.back()->set_texture(tex);
-        }
-        auto world_mat = world_transform::identity();
-        world_mat[0][3] = initial_pos.x();
-        world_mat[1][3] = initial_pos.y();
-        world_mat[2][3] = initial_pos.z();
-        objs.back()->set_world_transform(world_mat);
-        renderer.add_renderable(*objs.back());
+    obj::file obj;
+    read(in, obj);
+    std::vector<simple_vertex> vertices;
+    for (const auto& bv : obj.vertices) {
+        const auto pos = world_pos{static_cast<float>(-bv.x), static_cast<float>(bv.z), static_cast<float>(bv.y)};
+        const float scale = 5.0f;
+        vertices.push_back({scale*pos, 0.0f, 0.0f});
     }
+    return std::make_unique<d3d11_simple_obj>(renderer, util::make_array_view(vertices), util::make_array_view(obj.indices));
 }
-*/
 
 int main()
 {
     try {
-        const std::string data_dir = "../../data/";
-        util::native_file_system data_fs{data_dir};
+        util::native_file_system data_fs{"../../data/"};
         
         /*
         constexpr int grid_size = 250;
@@ -237,22 +113,15 @@ int main()
         std::map<key, bool> key_down;
 
         d3d11_renderer renderer{w};
-
-        auto bunny = obj::load_obj(data_dir + "bunny.obj");
-        const float scale = 5.0f;
-        std::vector<simple_vertex> bunny_vertices;
-        for (const auto& bv : bunny.vertices) {
-            const auto pos = world_pos{static_cast<float>(-bv.x), static_cast<float>(bv.z), static_cast<float>(bv.y)};
-            bunny_vertices.push_back({scale*pos, 0.0f, 0.0f});
-        }
-        d3d11_simple_obj bunny_obj{renderer, util::make_array_view(bunny_vertices), util::make_array_view(bunny.indices)};
-        renderer.add_renderable(bunny_obj);
+        auto bunny = load_obj_for_render(renderer, *data_fs.open("bunny.obj"));
+        bunny->set_world_transform(world_transform::factory::translation({1,1,0}));
+        renderer.add_renderable(*bunny);
         //d3d11_simple_obj terrain_obj{renderer, util::make_array_view(vertices), util::make_array_view(indices)};
         //renderer.add_renderable(terrain_obj);
 
         const std::string model_name = "mario";
         zip::in_zip_archive pk3_arc{data_fs.open("md3-"+model_name+".pk3")};
-        //q3_player_render_obj q3player{renderer, pk3_arc, "models/players/"+model_name};
+        q3_player_render_obj q3player{renderer, pk3_arc, "models/players/"+model_name};
 
         w.on_key_down([&](key k) {
             key_down[k] = true; 
@@ -301,7 +170,7 @@ int main()
             static auto start = clock::now();
             const auto t = std::chrono::duration_cast<std::chrono::duration<double>>(clock::now() - start).count();
             static auto last  = t;
-            //q3player.update(t);
+            q3player.update(t);
 
             view_ang += static_cast<float>((t - last) * 2.5 * (key_down[key::left] * -1 + key_down[key::right] * 1));
             world_pos view_vec{sinf(view_ang), -cosf(view_ang), 0.0f};
