@@ -1,1 +1,10 @@
-add_library(skirmish_math vec.cpp vec.h mat.cpp mat.h constants.h types.h)
+add_library(skirmish_math
+    3dmath.h
+    3dmath.cpp
+    constants.h
+    mat.cpp
+    mat.h
+    types.h
+    vec.cpp
+    vec.h
+    )
