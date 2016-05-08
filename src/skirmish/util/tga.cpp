@@ -13,7 +13,6 @@ void write_grayscale(std::ostream& os, unsigned width, unsigned height, const vo
 {
     auto put_u8 = [&](uint8_t x) { os.put(static_cast<char>(x)); };
     auto put_u16 = [&](uint16_t x) { put_u8(x&0xff); put_u8(x>>8); };
-    auto put_u32 = [&](uint32_t x) { put_u16(x&0xffff); put_u16(x>>16); };
 
     put_u8(0);                                                        // ID length
     put_u8(static_cast<uint8_t>(color_map_type::none));               // Color map type
@@ -72,6 +71,7 @@ bool read(util::in_stream& in, image& img)
         assert(!"Unsupported image features");
         return false;
     }
+    (void) cmap_first; (void) cmap_bpp; (void) alpha_info; // Ignored
 
     // Skip Image ID
     if (id_length) in.seek(id_length, util::seekdir::cur);

@@ -6,3 +6,4 @@ add_library(skirmish_win32
     win32_main_window.cpp
     win32_main_window.h
     )
+target_link_libraries(skirmish_win32 d3d11 d3dcompiler)

@@ -7,12 +7,14 @@
 
 namespace skirmish { namespace zip {
 
+using util::path_to_u8string;
+
 struct zip_path_compare {
     static constexpr char crude_transform(char c) {
         return c >= 'A' && c <= 'Z' ?  c + 'a' - 'A' : static_cast<unsigned char>(c) > 0x7f ? 0x7f : c;
     }
     static std::string crude_transform(const util::path& p) {
-        std::string s = p.generic_u8string();
+        std::string s = path_to_u8string(p);
         for (auto& c : s) c = crude_transform(c);
         return s;
     }
@@ -135,7 +137,7 @@ public:
 
         auto it = files_.find(filename);
         if (it == files_.end()) {
-            throw std::runtime_error(filename.generic_u8string() + " not found in zip archive");
+            throw std::runtime_error(path_to_u8string(filename) + " not found in zip archive");
         }
 
         const auto& ch = it->second;
@@ -143,7 +145,7 @@ public:
         local_file_header lh;
         read(zip_, lh);
         if (zip_.error() || lh.signature != local_file_header::signature_magic) {
-            throw std::runtime_error("Could not read local file header for " + filename.generic_u8string());
+            throw std::runtime_error("Could not read local file header for " + path_to_u8string(filename));
         }
 
         if (ch.min_version != lh.min_version ||
@@ -155,7 +157,7 @@ public:
             ch.compressed_size != lh.compressed_size ||
             ch.uncompressed_size != lh.uncompressed_size ||
             ch.filename_length != lh.filename_length) {
-            throw std::runtime_error("Local and central file headers differ for " + filename.generic_u8string());
+            throw std::runtime_error("Local and central file headers differ for " + path_to_u8string(filename));
         }
         // TODO: Could check filenames as well here...
         zip_.seek(lh.filename_length + lh.extra_field_length, util::seekdir::cur);
@@ -209,7 +211,7 @@ private:
             if (!is_dir) {
                 const auto ir = files_.insert({std::move(filename), central_header});
                 if (!ir.second) {
-                    throw std::runtime_error("Duplicate filename in zip: " + ir.first->first.generic_u8string());
+                    throw std::runtime_error("Duplicate filename in zip: " + path_to_u8string(ir.first->first));
                 }
             }
         }

@@ -36,8 +36,6 @@ struct simple_vertex {
     float s, t;
 };
 
-using world_transform = mat<4, 4, float, world_pos_tag>;
-
 class d3d11_simple_obj : public d3d11_renderable {
 public:
     explicit d3d11_simple_obj(d3d11_renderer& renderer, const util::array_view<simple_vertex>& vertices, const util::array_view<uint16_t>& indices);

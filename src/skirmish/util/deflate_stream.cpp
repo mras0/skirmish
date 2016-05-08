@@ -18,8 +18,8 @@ public:
         : s_(s)
         , compressed_size_(compressed_size)
         , uncompressed_size_(uncompressed_size)
-        , stream_()
-        , crc32_(::crc32(0, nullptr, 0)) {
+        , crc32_(::crc32(0, nullptr, 0))
+        , stream_() {
         assert(!s.error());
         int ret = inflateInit2(&stream_, -MAX_WBITS); // Initialize inflate in raw mode (no header)
         if (ret != Z_OK) {
@@ -51,7 +51,7 @@ public:
 
             assert(stream_.avail_in);
             assert(stream_.avail_out);
-            
+
             int ret = inflate(&stream_, Z_NO_FLUSH);
             if (ret != Z_OK && ret != Z_STREAM_END) {
                 throw zlib_exception("zlib inflate failed: " + std::string(stream_.msg ? stream_.msg : "unknown error"), ret);

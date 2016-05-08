@@ -15,8 +15,8 @@ world_pos to_world(const md3::vec3& v) {
     return md3::quake_to_meters_f * world_pos{v.x, v.y, v.z};
 }
 
-world_normal to_world_normal(const md3::vec3& v) {
-    return world_normal{v.x, v.y, v.z};
+world_pos to_world_normal(const md3::vec3& v) {
+    return world_pos{v.x, v.y, v.z};
 }
 
 std::vector<simple_vertex> vertices_from_frame(const md3::surface_with_data& surf, unsigned frame)

@@ -4,13 +4,26 @@
 
 namespace skirmish { namespace util {
 
+namespace {
+
+auto path_to_string(const path& p) {
+#ifdef _MSC_VER
+    return p.c_str();
+#else
+    // TODO: FIXME
+    return p.string();
+#endif
+}
+
+} // unnamed namespace
+
 class in_file_stream::impl
 {
 public:
     explicit impl(const path& filename)
         : file_pos_{0}
         , file_size_{invalid_stream_size}
-        , in_{filename.c_str(), std::fstream::binary} {
+        , in_{path_to_string(filename), std::fstream::binary} {
         if (in_) {
             in_.seekg(0, std::ios_base::end);
             file_size_ = in_.tellg();
@@ -20,8 +33,8 @@ public:
 
     static constexpr int buffer_size = 4096;
     uint8_t       buffer_[buffer_size];
-    uint64_t      file_size_;
     uint64_t      file_pos_;
+    uint64_t      file_size_;
     std::ifstream in_;
 };
 

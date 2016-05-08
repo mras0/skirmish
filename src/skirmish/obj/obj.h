@@ -14,8 +14,8 @@ struct vertex {
 };
 
 struct file {
-    std::vector<vertex>   vertices;
-    std::vector<uint16_t> indices;
+    std::vector<vertex>         vertices;
+    std::vector<unsigned short> indices;
 };
 
 bool read(util::in_stream& in, file& f);

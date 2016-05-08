@@ -19,11 +19,11 @@ path strip_root(const path& root, const path& p)
     }
 
     if (root_it != root_end) {
-        throw std::logic_error("strip_root: " + p.u8string() + " is out side root " + root.u8string());
+        throw std::logic_error("strip_root: " + path_to_u8string(p) + " is out side root " + path_to_u8string(root));
     }
 
     if (p_it == p_end) {
-        throw std::logic_error("strip_root: " +p.u8string() + " is equal to root " + root.u8string());
+        throw std::logic_error("strip_root: " + path_to_u8string(p) + " is equal to root " + path_to_u8string(root));
     }
 
     path res;
@@ -40,13 +40,13 @@ class native_file_system::impl {
 public:
     explicit impl(const path& root) : root_(root) {
         if (!exists(root) || !is_directory(root)) {
-            throw std::runtime_error(root.u8string() + " is an invalid path");
+            throw std::runtime_error(path_to_u8string(root) + " is an invalid path");
         }
     }
 
     std::vector<path> file_list() const {
         std::vector<path> files;
-        for (const auto& p: std::experimental::filesystem::recursive_directory_iterator{root_}) {
+        for (const auto& p: recursive_directory_iterator{root_}) {
             if (is_regular_file(p)) {
                 files.push_back(strip_root(root_, p));
             }

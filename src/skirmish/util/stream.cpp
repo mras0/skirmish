@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <cassert>
+#include <cstring>
 
 namespace skirmish { namespace util {
 
@@ -90,7 +91,7 @@ float in_stream::get_float_le()
 
 array_view<uint8_t> in_stream::zeros()
 {
-    static const uint8_t zeros[256];
+    static const uint8_t zeros[256] = {0,};
     return make_array_view(zeros);
 }
 
@@ -153,7 +154,7 @@ void in_mem_stream::do_seek(int64_t offset, seekdir way)
         new_pos = stream_size() + offset;
         break;
     }
-    if (new_pos >= 0 && new_pos <= stream_size()) {
+    if (new_pos <= stream_size()) {
         set_cursor(buffer().begin() + new_pos);
     }
 }
