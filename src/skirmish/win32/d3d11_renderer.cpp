@@ -1,5 +1,6 @@
 #include "d3d11_renderer.h"
 #include <skirmish/math/3dmath.h>
+#include <skirmish/math/constants.h>
 #include <cassert>
 #include <string>
 #include <sstream>
@@ -10,11 +11,9 @@
 
 #include <d3d11.h>
 #include <d3dcompiler.h>
-#include <directxmath.h>
 #include <iostream>
 
 using Microsoft::WRL::ComPtr;
-using namespace DirectX;
 
 #define COM_CHECK(expr) do { HRESULT _hr = (expr); if (FAILED(_hr)) throw_com_error(#expr, _hr); } while (0)
 
@@ -448,17 +447,10 @@ public:
 
         create_context_.device = device_.Get();
 
-        LARGE_INTEGER freq, count;
-        QueryPerformanceFrequency(&freq);
-        QueryPerformanceCounter(&count);
-        static LONGLONG init = count.QuadPart;
-
-
-        // Initialize the projection matrix
-        XMMATRIX projection = XMMatrixTranspose(XMMatrixPerspectiveFovLH(XM_PIDIV2, /*width / (FLOAT)height*/ 640.0f/480.0f, 0.01f, 100.0f));
+        // Initialize constant buffer
         constants_.world_transform      = world_matrix::identity();
         constants_.view_transform       = view_matrix::identity();
-        memcpy(&constants_.projection_transform, &projection, sizeof(projection));
+        constants_.projection_transform = transposed(projection_matrix::factory::perspective_fov_lh(pi_f/2.0f, /*width / (FLOAT)height*/ 640.0f/480.0f, 0.01f, 100.0f));
 
     }
 
