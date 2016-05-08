@@ -37,7 +37,7 @@ using namespace skirmish;
 auto calc_grid(int grid_size, float prescale, float grid_scale, float persistence, int number_of_octaves)
 {
     std::vector<simple_vertex> vertices(grid_size * grid_size);
-    std::vector<uint8_t> height_map(grid_size * grid_size);
+//    std::vector<uint8_t> height_map(grid_size * grid_size);
     for (int y = 0; y < grid_size; ++y) {
         for (int x = 0; x < grid_size; ++x) {
             const auto index  = x + y * grid_size;
@@ -51,7 +51,7 @@ auto calc_grid(int grid_size, float prescale, float grid_scale, float persistenc
                 abort();
             }
 #endif
-            height_map[index] = static_cast<uint8_t>(255.0f * fz);
+  //          height_map[index] = static_cast<uint8_t>(255.0f * fz);
             vertices[index].pos = world_pos{fx*grid_scale, fy*grid_scale, fz};
             vertices[index].s = fx;
             vertices[index].t = fy;
@@ -60,6 +60,41 @@ auto calc_grid(int grid_size, float prescale, float grid_scale, float persistenc
     //tga::write_grayscale(open_file::binary_out("height.tga"), grid_size, grid_size, height_map.data());
     return vertices;
 };
+
+std::unique_ptr<d3d11_simple_obj> make_terrian_obj(d3d11_renderer& renderer)
+{
+    constexpr int grid_size = 250;
+    static_assert(grid_size * grid_size <= 65335, "Grid too large");
+
+    constexpr float grid_scale = grid_size / 5.0f;
+
+    float persistence = 0.45f;
+    int number_of_octaves = 9;
+    float prescale = grid_scale;
+
+    std::vector<simple_vertex> vertices;
+
+    auto recalc_grid = [&] {
+        std::cout << "calc_grid(grid_size=" << grid_size << ", prescale=" << prescale << ", grid_scale=" << grid_scale << ", persistence=" << persistence << ", number_of_octaves=" << number_of_octaves << "\n";
+        vertices = calc_grid(grid_size, prescale, grid_scale, persistence, number_of_octaves);
+    };
+    recalc_grid();
+
+    std::vector<uint16_t> indices;
+    for (int y = 0; y < grid_size-1; ++y) {
+        for (int x = 0; x < grid_size-1; ++x) {
+            int idx = x + y * grid_size;
+            indices.push_back(static_cast<uint16_t>(idx));
+            indices.push_back(static_cast<uint16_t>(idx+1));
+            indices.push_back(static_cast<uint16_t>(idx+1+grid_size));
+
+            indices.push_back(static_cast<uint16_t>(idx+1+grid_size));
+            indices.push_back(static_cast<uint16_t>(idx+grid_size));
+            indices.push_back(static_cast<uint16_t>(idx));
+        }
+    }
+    return std::make_unique<d3d11_simple_obj>(renderer, util::make_array_view(vertices), util::make_array_view(indices));
+}
 
 std::unique_ptr<d3d11_simple_obj> load_obj_for_render(d3d11_renderer& renderer, util::in_stream& in)
 {
@@ -79,50 +114,20 @@ int main()
     try {
         util::native_file_system data_fs{"../../data/"};
         
-        constexpr int grid_size = 250;
-        static_assert(grid_size * grid_size <= 65335, "Grid too large");
-
-        constexpr float grid_scale = grid_size / 5.0f;
-
-        float persistence = 0.45f;
-        int number_of_octaves = 9;
-        float prescale = grid_scale;
-
-        std::vector<simple_vertex> vertices;
-
-        auto recalc_grid = [&] {
-            std::cout << "calc_grid(grid_size=" << grid_size << ", prescale=" << prescale << ", grid_scale=" << grid_scale << ", persistence=" << persistence << ", number_of_octaves=" << number_of_octaves << "\n";
-            vertices = calc_grid(grid_size, prescale, grid_scale, persistence, number_of_octaves);
-        };
-        recalc_grid();
-
-        std::vector<uint16_t> indices;
-        for (int y = 0; y < grid_size-1; ++y) {
-            for (int x = 0; x < grid_size-1; ++x) {
-                int idx = x + y * grid_size;
-                indices.push_back(static_cast<uint16_t>(idx));
-                indices.push_back(static_cast<uint16_t>(idx+1));
-                indices.push_back(static_cast<uint16_t>(idx+1+grid_size));
-
-                indices.push_back(static_cast<uint16_t>(idx+1+grid_size));
-                indices.push_back(static_cast<uint16_t>(idx+grid_size));
-                indices.push_back(static_cast<uint16_t>(idx));
-            }
-        }
-
         win32_main_window w{640, 480};
         std::map<key, bool> key_down;
 
         d3d11_renderer renderer{w};
+
         auto bunny = load_obj_for_render(renderer, *data_fs.open("bunny.obj"));
         bunny->set_world_transform(world_transform::factory::translation({1,1,0}));
         renderer.add_renderable(*bunny);
-        d3d11_simple_obj terrain_obj{renderer, util::make_array_view(vertices), util::make_array_view(indices)};
-        // Create default white 1x1 texture
+
+        auto terrain_obj = make_terrian_obj(renderer);
         static const uint32_t terrain_tex[] = { 0xffffffff, 0xff0000ff, 0xff00ff00, 0xffff0000} ;
         d3d11_texture tex(renderer, util::make_array_view(terrain_tex), 2, 2);
-        terrain_obj.set_texture(tex);
-        renderer.add_renderable(terrain_obj);
+        terrain_obj->set_texture(tex);
+        renderer.add_renderable(*terrain_obj);
 
         const std::string model_name = "mario";
         zip::in_zip_archive pk3_arc{data_fs.open("md3-"+model_name+".pk3")};
@@ -168,14 +173,13 @@ int main()
         });
 
         //world_pos camera_pos{grid_scale/2.0f, grid_scale/2.0f, 2.0f};
-        world_pos camera_pos{2.0f, 0.0f, 1.0f};
+        world_pos camera_pos{2.0f, 0.0f, 2.0f};
         float view_ang = -pi_f/2.0f;//-pi_f;
         w.on_paint([&] {
             using clock = std::chrono::high_resolution_clock;
             static auto start = clock::now();
             const auto t = std::chrono::duration_cast<std::chrono::duration<double>>(clock::now() - start).count();
             static auto last  = t;
-            q3player.update(t);
 
             view_ang += static_cast<float>((t - last) * 2.5 * (key_down[key::left] * -1 + key_down[key::right] * 1));
             world_pos view_vec{sinf(view_ang), -cosf(view_ang), 0.0f};
@@ -183,8 +187,11 @@ int main()
             camera_pos += view_vec * static_cast<float>((t - last) * 5 * (key_down[key::up] * 1 + key_down[key::down] * -1));
 
             auto camera_target = camera_pos + view_vec;
-            camera_target[2] = 0.5f;
+            camera_target[2] = 0.7f;
 
+            auto q3transform = world_transform::factory::translation(camera_target) *world_transform::factory::rotation_z(view_ang - pi_f/2.0f);
+
+            q3player.update(t, q3transform);
             std::ostringstream oss;
             oss << camera_pos << " " << camera_target << " viewdir: " << view_ang;
             w.set_title(oss.str());

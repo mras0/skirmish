@@ -183,17 +183,7 @@ public:
         , animation_info_(md3::read_animation_cfg(*fs.open(base_path + "/animation.cfg"))) {
     }
 
-    void update(double t) {
-        auto rot = world_transform::factory::rotation_z(static_cast<float>(t * 3));
-        auto legs_transform  = rot*world_transform::factory::translation({0.0f,0.0f, 0.0f}); 
-        update_transforms(legs_transform, t);
-    }
-
-private:
-    static constexpr const char* const head_tag  = "tag_head";
-    static constexpr const char* const torso_tag = "tag_torso";
-
-    void update_transforms(const world_transform& legs_transform, double t) {
+    void update(double t, const world_transform& legs_transform) {
         const auto torso_ai = calc_animation_instant(animation_info_[md3::TORSO_ATTACK], t);
         const auto legs_ai  = calc_animation_instant(animation_info_[md3::LEGS_WALKCR], t);
 
@@ -206,6 +196,10 @@ private:
         torso_.set_transform(torso_transform);
         legs_.set_transform(legs_transform);
     }
+
+private:
+    static constexpr const char* const head_tag  = "tag_head";
+    static constexpr const char* const torso_tag = "tag_torso";
 
     md3_render_obj              head_;
     md3_render_obj              torso_;
@@ -220,9 +214,9 @@ q3_player_render_obj::q3_player_render_obj(d3d11_renderer& renderer, util::file_
 
 q3_player_render_obj::~q3_player_render_obj() = default;
 
-void q3_player_render_obj::update(double t)
+void q3_player_render_obj::update(double t, const world_transform& transform)
 {
-    impl_->update(t);
+    impl_->update(t, transform);
 }
 
 } // namespace skirmish
