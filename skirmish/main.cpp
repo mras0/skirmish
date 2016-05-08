@@ -23,43 +23,16 @@
 #include <skirmish/win32/d3d11_renderer.h>
 #include <skirmish/win32/q3_player_render_obj.h>
 
+using namespace skirmish;
+
 template<unsigned Size, typename T, typename tag>
-std::ostream& operator<<(std::ostream& os, const skirmish::vec<Size, T, tag>& v) {
+std::ostream& operator<<(std::ostream& os, const vec<Size, T, tag>& v) {
     os << "(";
     for (unsigned i = 0; i < Size; ++i) {
         os << " " << v[i];
     }
     return os << " )";
 }
-
-using namespace skirmish;
-
-auto calc_grid(int grid_size, float prescale, float grid_scale, float persistence, int number_of_octaves)
-{
-    std::vector<simple_vertex> vertices(grid_size * grid_size);
-//    std::vector<uint8_t> height_map(grid_size * grid_size);
-    for (int y = 0; y < grid_size; ++y) {
-        for (int x = 0; x < grid_size; ++x) {
-            const auto index  = x + y * grid_size;
-            const auto fx = static_cast<float>(x) / grid_size;
-            const auto fy = static_cast<float>(y) / grid_size;
-            const auto fz = perlin::noise_2d(prescale*fx, prescale*fy, persistence, number_of_octaves);
-
-#ifndef NDEBUG
-            if (fz < 0 || fz > 1) {
-                std::cerr << "\n" << fz << "\n";
-                abort();
-            }
-#endif
-  //          height_map[index] = static_cast<uint8_t>(255.0f * fz);
-            vertices[index].pos = world_pos{fx*grid_scale, fy*grid_scale, fz};
-            vertices[index].s = fx;
-            vertices[index].t = fy;
-        }
-    }
-    //tga::write_grayscale(open_file::binary_out("height.tga"), grid_size, grid_size, height_map.data());
-    return vertices;
-};
 
 std::unique_ptr<d3d11_simple_obj> make_terrian_obj(d3d11_renderer& renderer)
 {
@@ -72,13 +45,19 @@ std::unique_ptr<d3d11_simple_obj> make_terrian_obj(d3d11_renderer& renderer)
     int number_of_octaves = 9;
     float prescale = grid_scale;
 
-    std::vector<simple_vertex> vertices;
-
-    auto recalc_grid = [&] {
-        std::cout << "calc_grid(grid_size=" << grid_size << ", prescale=" << prescale << ", grid_scale=" << grid_scale << ", persistence=" << persistence << ", number_of_octaves=" << number_of_octaves << "\n";
-        vertices = calc_grid(grid_size, prescale, grid_scale, persistence, number_of_octaves);
-    };
-    recalc_grid();
+    std::vector<simple_vertex> vertices(grid_size * grid_size);
+    for (int y = 0; y < grid_size; ++y) {
+        for (int x = 0; x < grid_size; ++x) {
+            const auto index  = x + y * grid_size;
+            const auto fx = static_cast<float>(x) / grid_size;
+            const auto fy = static_cast<float>(y) / grid_size;
+            const auto fz = perlin::noise_2d(prescale*fx, prescale*fy, persistence, number_of_octaves);
+            assert(fz >= 0.0f && fz <= 1.0f);
+            vertices[index].pos = world_pos{fx*grid_scale, fy*grid_scale, fz};
+            vertices[index].s = fx;
+            vertices[index].t = fy;
+        }
+    }
 
     std::vector<uint16_t> indices;
     for (int y = 0; y < grid_size-1; ++y) {
@@ -115,7 +94,6 @@ int main()
         util::native_file_system data_fs{"../../data/"};
         
         win32_main_window w{640, 480};
-        std::map<key, bool> key_down;
 
         d3d11_renderer renderer{w};
 
@@ -133,36 +111,9 @@ int main()
         zip::in_zip_archive pk3_arc{data_fs.open("md3-"+model_name+".pk3")};
         q3_player_render_obj q3player{renderer, pk3_arc, "models/players/"+model_name};
 
+        std::map<key, bool> key_down;
         w.on_key_down([&](key k) {
-            key_down[k] = true; 
-            /*
-            bool needs_to_recalc_grid = false;
-            constexpr float persistence_step = 0.05f;
-            constexpr float prescale_step = 1;
-            if (k == key::a && number_of_octaves < perlin::max_number_of_octaves) {
-                ++number_of_octaves;
-                needs_to_recalc_grid = true;
-            } else if (k == key::z && number_of_octaves > 1) {
-                --number_of_octaves;
-                needs_to_recalc_grid = true;
-            } else if (k == key::s && persistence + persistence_step <= 1.0f) {
-                persistence += persistence_step;
-                needs_to_recalc_grid = true;
-            } else if (k == key::x && persistence - persistence_step >= 0.0f) {
-                persistence -= persistence_step;
-                needs_to_recalc_grid = true;
-            } else if (k == key::d) {
-                prescale += prescale_step;
-                needs_to_recalc_grid = true;
-            } else if (k == key::c && prescale - prescale_step >= 1) {
-                prescale -= prescale_step;
-                needs_to_recalc_grid = true;
-            }
-
-            if (needs_to_recalc_grid) {
-                recalc_grid();
-                terrain_obj.update_vertices(util::make_array_view(vertices));
-            }*/
+            key_down[k] = true;        
         });
         w.on_key_up([&](key k) {
             key_down[k] = false;
@@ -172,33 +123,33 @@ int main()
             }
         });
 
-        //world_pos camera_pos{grid_scale/2.0f, grid_scale/2.0f, 2.0f};
         world_pos camera_pos{2.0f, 0.0f, 2.0f};
-        float view_ang = -pi_f/2.0f;//-pi_f;
+        float view_ang = -pi_f/2.0f;
         w.on_paint([&] {
+            // Time handling
             using clock = std::chrono::high_resolution_clock;
             static auto start = clock::now();
             const auto t = std::chrono::duration_cast<std::chrono::duration<double>>(clock::now() - start).count();
-            static auto last  = t;
+            static auto last_t = t;
+            const auto dt = t - last_t;
+            last_t = t;
 
-            view_ang += static_cast<float>((t - last) * 2.5 * (key_down[key::left] * -1 + key_down[key::right] * 1));
+            // Update according to movement
+            view_ang += static_cast<float>(dt * 2.5 * (key_down[key::left] * -1 + key_down[key::right] * 1));
             world_pos view_vec{sinf(view_ang), -cosf(view_ang), 0.0f};
-
-            camera_pos += view_vec * static_cast<float>((t - last) * 5 * (key_down[key::up] * 1 + key_down[key::down] * -1));
-
+            camera_pos += view_vec * static_cast<float>(dt * 5 * (key_down[key::up] * 1 + key_down[key::down] * -1));
             auto camera_target = camera_pos + view_vec;
             camera_target[2] = 0.7f;
 
-            auto q3transform = world_transform::factory::translation(camera_target) *world_transform::factory::rotation_z(view_ang - pi_f/2.0f);
+            // Update render stuff
+            q3player.update(t, world_transform::factory::translation(camera_target) * world_transform::factory::rotation_z(view_ang - pi_f/2.0f));
 
-            q3player.update(t, q3transform);
             std::ostringstream oss;
             oss << camera_pos << " " << camera_target << " viewdir: " << view_ang;
             w.set_title(oss.str());
 
             renderer.set_view(camera_pos, camera_target);
-            renderer.render();
-            last = t;
+            renderer.render();          
         });
         w.show();
 
