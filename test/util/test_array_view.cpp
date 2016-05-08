@@ -16,7 +16,7 @@ bool operator!=(const array_view<T>& l, const array_view<T>& r) {
 TEST_CASE("array_view") {
     char arr[4] = { 'b', 'l', 'a', 'h' };
     auto av = make_array_view(arr);
-    static_assert(std::is_same_v<decltype(av), array_view<char>>, "");
+    static_assert(std::is_same<decltype(av), array_view<char>>::value, "");
     REQUIRE(av.data() == &arr[0]);
     REQUIRE(av.size() == 4);
     REQUIRE(av.begin() == &arr[0]);

@@ -106,7 +106,8 @@ private:
     HWND hwnd_ = nullptr;
 
     static void register_class() {
-        WNDCLASS wc ={0,};
+        WNDCLASS wc;
+        ZeroMemory(&wc, sizeof(wc));
         wc.style         = CS_HREDRAW | CS_VREDRAW;
         wc.lpfnWndProc   = s_wndproc;
         wc.cbClsExtra    = 0;

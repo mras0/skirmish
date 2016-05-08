@@ -18,14 +18,16 @@ if (MSVC)
     #add_definitions("/wd4127") # C4127: conditional expression is constant
     #add_definitions("/wd4709") # C4709: comma operator within array index expression
     #add_definitions("/wd4592") # C4592: '???': symbol will be dynamically initialized (implementation limitation)
-
-    add_definitions("-DWIN32 -D_SCL_SECURE_NO_WARNINGS -DUNICODE -D_UNICODE")
 else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror -pedantic -std=c++14 -g")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror -pedantic -std=c++1z -g")
     if (MINGW)
         include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/mingw)
     endif()
     #TODO: Make sure boost filesystem is available
+endif()
+
+if (WIN32)
+    add_definitions("-DWIN32 -D_SCL_SECURE_NO_WARNINGS -DUNICODE -D_UNICODE")
 endif()
 
 enable_testing()

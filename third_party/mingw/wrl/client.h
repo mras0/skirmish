@@ -1,4 +1,8 @@
-// From https://github.com/apitrace/apitrace/commit/1eb9029d752b12c3bacb6399bd78c2c63dfdda3c
+// Based on https://github.com/apitrace/apitrace/commit/1eb9029d752b12c3bacb6399bd78c2c63dfdda3c
+// Methods added:
+//  explicit operator bool
+//  move constructor and move assignment
+//  Reset
 
 /**************************************************************************
  *
@@ -58,12 +62,21 @@ public:
     {
     }
 
+    ComPtr(ComPtr&& other) :
+        p(other.p) {
+        other.p = nullptr;
+    }
+
     ~ComPtr() {
         T *temp = p;
         p = nullptr;
         if (temp) {
             temp->Release();
         }
+    }
+
+    explicit operator bool() const {
+        return p != nullptr;
     }
 
     T **
@@ -75,6 +88,16 @@ public:
     T *
     Get(void) const {
         return p;
+    }
+
+    unsigned
+    Reset(void) {
+        unsigned long refcount = 0;
+        if (p) {
+            refcount = p->Release();
+            p = nullptr;
+        }
+        return refcount;
     }
 
     struct no_ref_count : public T
@@ -102,6 +125,19 @@ public:
             if (q) {
                 q->AddRef();
             }
+        }
+        return *this;
+    }
+
+    ComPtr&
+    operator = (ComPtr&& rhs) {
+        if (p != rhs.p) {
+            if (p) {
+                p->Release();
+                p = nullptr;
+            }
+            p = rhs.p;
+            rhs.p = nullptr;
         }
         return *this;
     }

@@ -133,10 +133,10 @@ TEST_CASE("mat3*f") {
     mat32 n{1, 2,
             3, 4,
             5, 6};
-    static_assert(std::is_same_v<mat33::row_type, v3f>, "");
-    static_assert(std::is_same_v<decltype(m.col(0)), v3f>, "");
-    static_assert(std::is_same_v<mat32::row_type, v2f>, "");
-    static_assert(std::is_same_v<decltype(n.col(0)), v3f>, "");
+    static_assert(std::is_same<mat33::row_type, v3f>::value, "");
+    static_assert(std::is_same<decltype(m.col(0)), v3f>::value, "");
+    static_assert(std::is_same<mat32::row_type, v2f>::value, "");
+    static_assert(std::is_same<decltype(n.col(0)), v3f>::value, "");
 
     SECTION("init") {
         REQUIRE(m[0].x() == 1);

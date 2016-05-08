@@ -91,6 +91,7 @@ private:
     static constexpr size_t buffer_size = 16384;
     uint8_t    buffer_[buffer_size];
 };
+constexpr size_t in_deflate_stream::impl::buffer_size;
 
 in_deflate_stream::in_deflate_stream(in_stream& inner_stream, size_t compressed_size, size_t uncompressed_size) : impl_(new impl{inner_stream, compressed_size, uncompressed_size})
 {

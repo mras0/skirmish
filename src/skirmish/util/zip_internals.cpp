@@ -21,6 +21,8 @@ void read(util::in_stream& in, E& value)
     value = static_cast<E>(repr);
 }
 
+constexpr uint32_t end_of_central_directory_record::signature_magic;
+constexpr uint32_t end_of_central_directory_record::min_size_bytes;
 
 void read(util::in_stream& in, end_of_central_directory_record& r)
 {
@@ -43,6 +45,9 @@ std::ostream& operator<<(std::ostream& os, compression_methods cm)
     return os << "compression_methods{" << static_cast<int>(cm) << "}";
 }
 
+constexpr uint32_t central_directory_file_header::signature_magic;
+constexpr uint32_t central_directory_file_header::min_size_bytes;
+
 void read(util::in_stream& in, central_directory_file_header& r)
 {
     read(in, r.signature);
@@ -63,6 +68,9 @@ void read(util::in_stream& in, central_directory_file_header& r)
     read(in, r.external_file_attributes);
     read(in, r.local_file_header_offset);
 }
+
+constexpr uint32_t local_file_header::signature_magic;
+constexpr uint32_t local_file_header::min_size_bytes;
 
 void read(util::in_stream& in, local_file_header& r)
 {

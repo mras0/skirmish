@@ -3,6 +3,7 @@
 
 #include <array>
 #include <utility> // make_index_sequence
+#include <math.h>
 
 namespace skirmish {
 
@@ -49,13 +50,13 @@ MAKE_VEC_ACCESSOR(z, 2)
 
 
 namespace detail {
-template<typename tag, unsigned Size, typename T, std::size_t... I>
+template<typename tag, size_t Size, typename T, std::size_t... I>
 constexpr vec<Size, T, tag> make_vec_impl(const std::array<T, Size>& arr, std::index_sequence<I...>) {
     return {arr[I]...};
 }
 }
 
-template<typename tag, unsigned Size, typename T>
+template<typename tag, size_t Size, typename T>
 constexpr vec<Size, T, tag> make_vec(const std::array<T, Size>& arr) {
     return detail::make_vec_impl<tag>(arr, std::make_index_sequence<Size>());
 }

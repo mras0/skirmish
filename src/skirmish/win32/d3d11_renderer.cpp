@@ -11,7 +11,6 @@
 
 #include <d3d11.h>
 #include <d3dcompiler.h>
-#include <iostream>
 
 using Microsoft::WRL::ComPtr;
 
@@ -42,7 +41,7 @@ ComPtr<ID3DBlob> compile_shader(const char* data, const char* entry_point, const
 
     ComPtr<ID3DBlob> blob;
     ComPtr<ID3DBlob> error_messages;
-    HRESULT hr = D3DCompile(data, strlen(data), nullptr, nullptr, nullptr, entry_point, target, dwShaderFlags, 0, &blob, &error_messages);
+    HRESULT hr = D3DCompile(data, strlen(data), nullptr, nullptr, nullptr, entry_point, target, dwShaderFlags, 0, blob.GetAddressOf(), error_messages.GetAddressOf());
     if (FAILED(hr)) {
         std::string errmsg = "D3DCompile failed";
         if (error_messages) {
@@ -94,7 +93,7 @@ ComPtr<ID3D11Buffer> create_buffer(ID3D11Device* device, D3D11_BIND_FLAG bind_fl
     init_data.pSysMem = data;
 
     ComPtr<ID3D11Buffer> buffer;
-    COM_CHECK(device->CreateBuffer(&bd, data ? &init_data : nullptr, &buffer));
+    COM_CHECK(device->CreateBuffer(&bd, data ? &init_data : nullptr, buffer.GetAddressOf()));
 
     return buffer;
 }
@@ -181,7 +180,7 @@ public:
         tex_desc.CPUAccessFlags     = 0; // No CPU access after creation
         tex_desc.MiscFlags          = 0;
 
-        D3D11_SUBRESOURCE_DATA initial_data = { &rgba_data[0], width*sizeof(rgba_data[0]), 0};
+        D3D11_SUBRESOURCE_DATA initial_data = { &rgba_data[0], static_cast<UINT>(width*sizeof(rgba_data[0])), 0};
         ComPtr<ID3D11Texture2D> texture;
         COM_CHECK(device->CreateTexture2D(&tex_desc, &initial_data, texture.GetAddressOf()));
 
@@ -228,7 +227,7 @@ public:
         static_assert(sizeof(simple_vertex) == 5*sizeof(float), "");
 
         // Create the input layout
-        COM_CHECK(device->CreateInputLayout(layout, numElements, vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), &vertex_layout));
+        COM_CHECK(device->CreateInputLayout(layout, numElements, vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), vertex_layout.GetAddressOf()));
 
         // Create vertex buffer
         vertex_buffer = create_buffer(device, D3D11_BIND_VERTEX_BUFFER, vertices.data(), static_cast<UINT>(vertices.size() * sizeof(vertices[0])));
@@ -356,6 +355,16 @@ public:
         const int width = client_rect.right - client_rect.left;
         const int height = client_rect.bottom - client_rect.top;
 
+#ifndef _MSC_VER
+        PFN_D3D11_CREATE_DEVICE_AND_SWAP_CHAIN D3D11CreateDeviceAndSwapChain;
+        if (auto d3d11_dll = LoadLibraryA("d3d11.dll")) {
+            if (!(D3D11CreateDeviceAndSwapChain = reinterpret_cast<PFN_D3D11_CREATE_DEVICE_AND_SWAP_CHAIN>(GetProcAddress(d3d11_dll, "D3D11CreateDeviceAndSwapChain")))) {
+                throw_system_error("Could not find D3D11CreateDeviceAndSwapChain");
+            }
+        } else {
+            throw_system_error("Could not load d3d11.dll");
+        }
+#endif
 
         //
         // Create device and swap chain
@@ -385,18 +394,18 @@ public:
             1,                                     // FeatureLevels
             D3D11_SDK_VERSION,                     // SDKVersion
             &sd,                                   // pSwapChainDesc
-            &swap_chain_,                          // ppSwapChain
-            &device_,                              // ppDevice
+            swap_chain_.GetAddressOf(),            // ppSwapChain
+            device_.GetAddressOf(),                // ppDevice
             nullptr,                               // pFeatureLevel
-            &immediate_context_                    // ppImmediateContext
+            immediate_context_.GetAddressOf()      // ppImmediateContext
         ));
 
         // Get a pointer to the back buffer
         ComPtr<ID3D11Texture2D> back_buffer;
-        COM_CHECK(swap_chain_->GetBuffer(0, IID_PPV_ARGS(&back_buffer)));
+        COM_CHECK(swap_chain_->GetBuffer(0, IID_PPV_ARGS(back_buffer.GetAddressOf())));
 
         // Create a render-target view
-        COM_CHECK(device_->CreateRenderTargetView(back_buffer.Get(), nullptr, &render_target_view_));
+        COM_CHECK(device_->CreateRenderTargetView(back_buffer.Get(), nullptr, render_target_view_.GetAddressOf()));
 
         // Set depth test state
         D3D11_DEPTH_STENCIL_DESC ds_test_desc;
@@ -405,10 +414,10 @@ public:
         ds_test_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
         ds_test_desc.DepthFunc = D3D11_COMPARISON_LESS;
         ComPtr<ID3D11DepthStencilState> ds_test;
-        COM_CHECK(device_->CreateDepthStencilState(&ds_test_desc, &ds_test));
+        COM_CHECK(device_->CreateDepthStencilState(&ds_test_desc, ds_test.GetAddressOf()));
         immediate_context_->OMSetDepthStencilState(ds_test.Get(), 0);
 
-        
+
         // Create depth buffer
         D3D11_TEXTURE2D_DESC back_buffer_desc;
         back_buffer->GetDesc(&back_buffer_desc);
@@ -426,10 +435,10 @@ public:
         depth_desc.CPUAccessFlags = 0;
         depth_desc.MiscFlags = 0;
         ComPtr<ID3D11Texture2D> depth_stencil;
-        COM_CHECK(device_->CreateTexture2D(&depth_desc, nullptr, &depth_stencil));
+        COM_CHECK(device_->CreateTexture2D(&depth_desc, nullptr, depth_stencil.GetAddressOf()));
 
         // Create depth buffer view
-        COM_CHECK(device_->CreateDepthStencilView(depth_stencil.Get(), nullptr, &depth_stencil_view_));
+        COM_CHECK(device_->CreateDepthStencilView(depth_stencil.Get(), nullptr, depth_stencil_view_.GetAddressOf()));
 
         // Bind the views
         ID3D11RenderTargetView* targets[] = {render_target_view_.Get()};

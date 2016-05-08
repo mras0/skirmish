@@ -25,3 +25,7 @@ add_library(skirmish_util
 
 target_link_libraries(skirmish_util zlibstatic)
 target_include_directories(skirmish_util PRIVATE ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR})
+
+if (NOT MSVC)
+    target_link_libraries(skirmish_util boost_filesystem boost_system)
+endif()
