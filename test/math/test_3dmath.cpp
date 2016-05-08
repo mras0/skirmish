@@ -65,30 +65,45 @@ TEST_CASE("Vector cross product") {
     REQUIRE(cross((v3{1, 2, 3}), (v3{4, 5, 6})) == (v3{-3, 6, -3}));
 }
 
+#ifdef _MSC_VER
+#define REQUIRE_MAT_EQ(a, b) REQUIRE(a == b)
+#else
+#define REQUIRE_ELEM_EQ(a, b) REQUIRE(a == Approx(b))
+#define REQUIRE_MAT_EQ(a, b) do {\
+    REQUIRE_ELEM_EQ(a[0][0], b[0][0]); REQUIRE_ELEM_EQ(a[0][1], b[0][1]); REQUIRE_ELEM_EQ(a[0][2], b[0][2]); REQUIRE_ELEM_EQ(a[0][3], b[0][3]);\
+    REQUIRE_ELEM_EQ(a[1][0], b[1][0]); REQUIRE_ELEM_EQ(a[1][1], b[1][1]); REQUIRE_ELEM_EQ(a[1][2], b[1][2]); REQUIRE_ELEM_EQ(a[1][3], b[1][3]);\
+    REQUIRE_ELEM_EQ(a[2][0], b[2][0]); REQUIRE_ELEM_EQ(a[2][1], b[2][1]); REQUIRE_ELEM_EQ(a[2][2], b[2][2]); REQUIRE_ELEM_EQ(a[2][3], b[2][3]);\
+    REQUIRE_ELEM_EQ(a[3][0], b[3][0]); REQUIRE_ELEM_EQ(a[3][1], b[3][1]); REQUIRE_ELEM_EQ(a[3][2], b[3][2]); REQUIRE_ELEM_EQ(a[3][3], b[3][3]);\
+} while(0)
+#endif
+
 TEST_CASE("LookAtLH") {
-    const m44 res1{
+    const m44 expected1{
         0.70710677f, -0.40824828f, -0.57735026f,  0.00000000f,
         -0.70710677f, -0.40824828f, -0.57735026f,  0.00000000f,
         0.00000000f,  0.81649655f, -0.57735026f,  0.00000000f,
         0.00000000f,  0.00000000f,  3.46410155f,  1.00000000f,
     };
-    REQUIRE(m44::factory::look_at_lh((v3{2.0f, 2.0f, 2.0f}), (v3{0.0f, 0.0f, 0.0f}), (v3{0.0f, 0.0f, 1.0f})) == res1);
+    const auto res1 = m44::factory::look_at_lh((v3{2.0f, 2.0f, 2.0f}), (v3{0.0f, 0.0f, 0.0f}), (v3{0.0f, 0.0f, 1.0f}));
+    REQUIRE_MAT_EQ(res1, expected1);
 
-    const m44 res2{
+    const m44 expected2{
         -0.92847675f, -0.29436204f, -0.22645542f,  0.00000000f,
         -0.37139070f,  0.73590505f,  0.56613857f,  0.00000000f,
          0.00000000f,  0.60974991f, -0.79259396f,  0.00000000f,
          1.29986739f,  0.77795696f,  6.90689039f,  1.00000000f,
     };
-    REQUIRE(m44::factory::look_at_lh((v3{3.0f, -4.0f, 5.0f}), (v3{1.0f, 1.0f, -2.0f}), (v3{0.0f, 0.0f, 1.0f})) == res2);
+    const auto res2 = m44::factory::look_at_lh((v3{3.0f, -4.0f, 5.0f}), (v3{1.0f, 1.0f, -2.0f}), (v3{0.0f, 0.0f, 1.0f}));
+    REQUIRE_MAT_EQ(res2, expected2);
 }
 
 TEST_CASE("PerspectiveFovLH") {
-    m44 expected{
+    const m44 expected1{
          0.75000000f,  0.00000000f,  0.00000000f,  0.00000000f,
          0.00000000f,  1.00000000f,  0.00000000f,  0.00000000f,
          0.00000000f,  0.00000000f,  1.00010002f,  1.00000000f,
          0.00000000f,  0.00000000f, -0.01000100f,  0.00000000f,
     };
-    REQUIRE(m44::factory::perspective_fov_lh(pi_f / 2.0f, 640.0f/480.0f, 0.01f, 100.0f) == expected);
+    const auto res1 = m44::factory::perspective_fov_lh(pi_f / 2.0f, 640.0f/480.0f, 0.01f, 100.0f);
+    REQUIRE_MAT_EQ(res1, expected1);
 }

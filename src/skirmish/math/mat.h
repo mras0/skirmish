@@ -53,6 +53,20 @@ struct mat {
         return *this;
     }
 
+    mat& operator+=(const mat& rhs) {
+        for (unsigned r = 0; r < Rows; ++r) {
+            (*this)[r] += rhs[r];
+        }
+        return *this;
+    }
+
+    mat& operator-=(const mat& rhs) {
+        for (unsigned r = 0; r < Rows; ++r) {
+            (*this)[r] -= rhs[r];
+        }
+        return *this;
+    }
+
     bool operator==(const mat& rhs) const {
         for (unsigned r = 0; r < Rows; ++r) {
             if ((*this)[r] != rhs[r]) {
@@ -110,6 +124,20 @@ template<unsigned Rows, unsigned Columns, typename T, typename tag>
 auto operator*(T scale, const mat<Rows, Columns, T, tag>& m)
 {
     return m * scale;
+}
+
+template<unsigned Rows, unsigned Columns, typename T, typename tag>
+auto operator+(const mat<Rows, Columns, T, tag>& l, const mat<Rows, Columns, T, tag>& r)
+{
+    auto res = l;
+    return res += r;
+}
+
+template<unsigned Rows, unsigned Columns, typename T, typename tag>
+auto operator-(const mat<Rows, Columns, T, tag>& l, const mat<Rows, Columns, T, tag>& r)
+{
+    auto res = l;
+    return res -= r;
 }
 
 namespace detail {

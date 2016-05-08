@@ -172,6 +172,34 @@ TEST_CASE("mat3*f") {
         REQUIRE((m*-2.0f)[1][1] == -10.0f);
         REQUIRE((-2.0f*m)[1][1] == -10.0f);
     }
+    SECTION("addition") {
+        REQUIRE((m+m) == 2.0f*m);
+        REQUIRE((n+n) == 2.0f*n);
+        REQUIRE((m+(mat33{
+            10, 20, 30, 
+            10, 20, 30,
+            10, 20, 30})) == (mat33{
+            11, 22, 33,
+            14, 25, 36,
+            17, 28, 39
+        }));
+        auto cpy = m;
+        REQUIRE((cpy += m) == 2.0f*m);
+    }
+    SECTION("subtraction") {
+        REQUIRE((m-m) == mat33::zero());
+        REQUIRE((n-n) == mat32::zero());
+        REQUIRE((m-(mat33{
+            10, 20, 30, 
+            10, 20, 30,
+            10, 20, 30})) == (mat33{
+            -9, -18, -27,
+            -6, -15, -24,
+            -3, -12, -21
+        }));
+        auto cpy = m;
+        REQUIRE((cpy -= m) == mat33::zero());
+    }
 
     SECTION("mul 33 32") {
         REQUIRE(m*n == (mat32{
