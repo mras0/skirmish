@@ -180,4 +180,22 @@ TEST_CASE("mat3*f") {
             7*1+8*3+9*5, 7*2+8*4+9*6,
         }));
     }
+    SECTION("transpose") {
+        mat33 mt{
+            1, 4, 7,
+            2, 5, 8,
+            3, 6, 9
+        };
+        mat<2, 3, float, tag1> nt{
+            1, 3, 5,
+            2, 4, 6
+        };
+
+        REQUIRE(transposed(m) == mt);
+        REQUIRE(transposed(n) == nt);
+        REQUIRE(transposed(mt) == m);
+        REQUIRE(transposed(nt) == n);
+        REQUIRE(transposed(transposed(m)) == m);
+        REQUIRE(transposed(transposed(n)) == n);
+    }
 }

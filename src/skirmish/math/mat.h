@@ -138,6 +138,18 @@ constexpr mat<Rows, Columns, T, tag> mat<Rows, Columns, T, tag>::identity()
     return detail::make_identity_impl<Columns, T, tag>(std::make_index_sequence<Rows>());
 }
 
+template<unsigned Rows, unsigned Columns, typename T, typename tag>
+mat<Columns, Rows, T, tag> transposed(const mat<Rows, Columns, T, tag>& m)
+{
+    // TODO: optimize
+    mat<Columns, Rows, T, tag> res;
+    for (unsigned c = 0; c < Columns; ++c) {
+        for (unsigned r = 0; r < Rows; ++r) {
+            res[c][r] = m[r][c];
+        }
+    }
+    return res;
+}
 
 } // namespace skirmish
 

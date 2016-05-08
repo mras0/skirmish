@@ -46,7 +46,7 @@ public:
 
     void set_texture(d3d11_texture& texture);
 
-    void set_world_transform(const world_transform& xform);
+    void set_world_transform(const world_matrix& xform);
 
 private:
     class impl;

@@ -5,6 +5,7 @@
 
 using namespace skirmish;
 struct my_tag;
+using v3  = vec<3, float, my_tag>;
 using m33 = mat<3, 3, float, my_tag>;
 using m44 = mat<4, 4, float, my_tag>;
 
@@ -56,4 +57,60 @@ TEST_CASE("Translation matrices") {
         0, 0, 1, 3,
         0, 0, 0, 1,
     }));
+}
+
+TEST_CASE("Vector cross product") {
+    REQUIRE(cross((v3{1, 0, 0}), (v3{0, 1, 0})) == (v3{0, 0, 1}));
+    REQUIRE(cross((v3{0, 3, 0}), (v3{0, 0, 4})) == (v3{12, 0, 0}));
+    REQUIRE(cross((v3{1, 2, 3}), (v3{4, 5, 6})) == (v3{-3, 6, -3}));
+}
+
+#if 0
+#include <directxmath.h>
+#include <iostream>
+#include <iomanip>
+using namespace DirectX;
+
+std::ostream& operator<<(std::ostream& os, const XMMATRIX& m)
+{
+    for (unsigned r = 0; r < 4; ++r) {
+        for (unsigned c = 0; c < 4; ++c) {
+            os << ((float*)&m.r[r])[c] << ", ";
+        }
+        os << "\n";
+    }
+    return os;
+}
+XMVECTOR Eye = XMVectorSet(2.0f, 2.0f, 2.0f, 0.0f);
+XMVECTOR At = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+XMVECTOR Up = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+XMMATRIX view = XMMatrixLookAtLH(Eye, At, Up);
+std::cout.precision(8);
+std::cout << std::fixed << std::showpos;
+std::cout << view << std::endl;
+
+Eye = XMVectorSet(3.0f, -4.0f, 5.0f, 0.0f);
+At = XMVectorSet(1.0f, 1.0f, -2.0f, 0.0f);
+Up = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+view = XMMatrixLookAtLH(Eye, At, Up);
+std::cout << view << std::endl;
+std::cout << res2 << std::endl;
+#endif
+
+TEST_CASE("LookAtLH") {
+    const m44 res1{
+        0.70710677f, -0.40824828f, -0.57735026f,  0.00000000f,
+        -0.70710677f, -0.40824828f, -0.57735026f,  0.00000000f,
+        0.00000000f,  0.81649655f, -0.57735026f,  0.00000000f,
+        0.00000000f,  0.00000000f,  3.46410155f,  1.00000000f,
+    };
+    REQUIRE(m44::factory::look_at_lh((v3{2.0f, 2.0f, 2.0f}), (v3{0.0f, 0.0f, 0.0f}), (v3{0.0f, 0.0f, 1.0f})) == res1);
+
+    const m44 res2{
+        -0.92847675f, -0.29436204f, -0.22645542f,  0.00000000f,
+        -0.37139070f,  0.73590505f,  0.56613857f,  0.00000000f,
+         0.00000000f,  0.60974991f, -0.79259396f,  0.00000000f,
+         1.29986739f,  0.77795696f,  6.90689039f,  1.00000000f,
+    };
+    REQUIRE(m44::factory::look_at_lh((v3{3.0f, -4.0f, 5.0f}), (v3{1.0f, 1.0f, -2.0f}), (v3{0.0f, 0.0f, 1.0f})) == res2);
 }

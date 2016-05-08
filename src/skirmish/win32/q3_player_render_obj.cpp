@@ -122,7 +122,7 @@ public:
         throw std::runtime_error("Tag " + name + " not found for frame " + std::to_string(frame));
     }
 
-    void set_transform(const world_transform& transform) {
+    void set_transform(const world_matrix& transform) {
         for (auto& s : surfaces_) {
             s->set_world_transform(transform);
         }
@@ -151,7 +151,7 @@ private:
 };
 
 
-world_transform lerp(const md3::tag& a, const md3::tag& b, float t)
+world_matrix lerp(const md3::tag& a, const md3::tag& b, float t)
 {
     // Linear interpolation of the individual axes and the renormalizing was good enough for quake
     // but we might want to do slerp on quaternions later on
@@ -159,7 +159,7 @@ world_transform lerp(const md3::tag& a, const md3::tag& b, float t)
     const auto x      = normalized(lerp(to_world_normal(a.x_axis), to_world_normal(b.x_axis), t));
     const auto y      = normalized(lerp(to_world_normal(a.y_axis), to_world_normal(b.y_axis), t));
     const auto z      = normalized(lerp(to_world_normal(a.z_axis), to_world_normal(b.z_axis), t));
-    return world_transform {
+    return world_matrix{
         x.x(), y.x(), z.x(), origin.x(),
         x.y(), y.y(), z.y(), origin.y(),
         x.z(), y.z(), z.z(), origin.z(),
@@ -167,7 +167,7 @@ world_transform lerp(const md3::tag& a, const md3::tag& b, float t)
     };
 }
 
-world_transform animate_tag(const md3_render_obj& obj, const animation_instant& ai, const char* tag)
+world_matrix animate_tag(const md3_render_obj& obj, const animation_instant& ai, const char* tag)
 {
     return lerp(obj.tag(tag, ai.start_frame), obj.tag(tag, ai.end_frame), ai.sub_time);
 }
@@ -183,7 +183,7 @@ public:
         , animation_info_(md3::read_animation_cfg(*fs.open(base_path + "/animation.cfg"))) {
     }
 
-    void update(double t, const world_transform& legs_transform) {
+    void update(double t, const world_matrix& legs_transform) {
         const auto torso_ai = calc_animation_instant(animation_info_[md3::TORSO_ATTACK], t);
         const auto legs_ai  = calc_animation_instant(animation_info_[md3::LEGS_WALKCR], t);
 
@@ -214,7 +214,7 @@ q3_player_render_obj::q3_player_render_obj(d3d11_renderer& renderer, util::file_
 
 q3_player_render_obj::~q3_player_render_obj() = default;
 
-void q3_player_render_obj::update(double t, const world_transform& transform)
+void q3_player_render_obj::update(double t, const world_matrix& transform)
 {
     impl_->update(t, transform);
 }

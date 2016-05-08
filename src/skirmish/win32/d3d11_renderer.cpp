@@ -1,4 +1,5 @@
 #include "d3d11_renderer.h"
+#include <skirmish/math/3dmath.h>
 #include <cassert>
 #include <string>
 #include <sstream>
@@ -9,22 +10,13 @@
 
 #include <d3d11.h>
 #include <d3dcompiler.h>
-
 #include <directxmath.h>
+#include <iostream>
 
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 
 #define COM_CHECK(expr) do { HRESULT _hr = (expr); if (FAILED(_hr)) throw_com_error(#expr, _hr); } while (0)
-
-namespace {
-
-template<typename T, typename tag>
-XMVECTOR make_xmvec(const skirmish::vec<3, T, tag>& v, const T& w) {
-    return XMVectorSet(v.x(), v.y(), v.z(), w);
-}
-
-} // unnamed namespace
 
 namespace skirmish {
 
@@ -108,10 +100,10 @@ ComPtr<ID3D11Buffer> create_buffer(ID3D11Device* device, D3D11_BIND_FLAG bind_fl
     return buffer;
 }
 
-struct ConstantBuffer {
-    XMMATRIX mWorld;
-    XMMATRIX mView;
-    XMMATRIX mProjection;
+struct shader_constants {
+    world_matrix      world_transform;
+    view_matrix       view_transform;
+    projection_matrix projection_transform;
 };
 
 const char shader_source[] = 
@@ -165,7 +157,7 @@ float4 PS( VS_OUTPUT input ) : SV_Target
 class d3d11_render_context {
 public:
     ID3D11DeviceContext* immediate_context;
-    ConstantBuffer       contants;
+    shader_constants     contants;
 };
 
 class d3d11_create_context {
@@ -247,7 +239,7 @@ public:
         index_buffer = create_buffer(device, D3D11_BIND_INDEX_BUFFER, indices.data(), static_cast<UINT>(indices.size() * sizeof(indices[0])));
 
         // Create constant buffer
-        constant_buffer = create_buffer(device, D3D11_BIND_CONSTANT_BUFFER, nullptr, sizeof(ConstantBuffer));
+        constant_buffer = create_buffer(device, D3D11_BIND_CONSTANT_BUFFER, nullptr, sizeof(shader_constants));
 
         // Create sampler
         D3D11_SAMPLER_DESC sampler_desc;
@@ -262,13 +254,12 @@ public:
         // This might not be a great idea?
         device->GetImmediateContext(immediate_context.GetAddressOf());
 
-        transform = world_transform::identity();
+        transform = world_matrix::identity();
     }
 
     void do_render(d3d11_render_context& render_context) {
-        ConstantBuffer constants = render_context.contants;
-        static_assert(sizeof(transform) == sizeof(XMMATRIX), "");
-        memcpy(&constants.mWorld, &transform, sizeof(transform));
+        shader_constants constants = render_context.contants;
+        constants.world_transform = transform;
 
         // Update constant buffer
         immediate_context->UpdateSubresource(constant_buffer.Get(), 0, nullptr, &constants, 0, 0);
@@ -310,7 +301,7 @@ public:
         immediate_context->UpdateSubresource(vertex_buffer.Get(), 0, nullptr, vertices.data(), 0, 0);
     }
 
-    void set_world_transform(const world_transform& xform) {
+    void set_world_transform(const world_matrix& xform) {
         transform = xform;
     }
 
@@ -330,7 +321,7 @@ private:
     ComPtr<ID3D11SamplerState>       sampler_state;
     ComPtr<ID3D11DeviceContext>      immediate_context;
     UINT                             index_count;
-    world_transform                  transform;
+    world_matrix                     transform;
 };
 
 d3d11_simple_obj::d3d11_simple_obj(d3d11_renderer& renderer, const util::array_view<simple_vertex>& vertices, const util::array_view<uint16_t>& indices) : impl_(new impl{renderer, vertices, indices}) {
@@ -347,7 +338,7 @@ void d3d11_simple_obj::set_texture(d3d11_texture& texture)
     impl_->set_texture(texture);
 }
 
-void d3d11_simple_obj::set_world_transform(const world_transform & xform)
+void d3d11_simple_obj::set_world_transform(const world_matrix& xform)
 {
     impl_->set_world_transform(xform);
 }
@@ -463,20 +454,11 @@ public:
         static LONGLONG init = count.QuadPart;
 
 
-        // Initialize constant buffer
-        XMMATRIX world = XMMatrixIdentity();
-
-        // Initialize the view matrix
-        XMVECTOR Eye = XMVectorSet(2.0f, 2.0f, 2.0f, 0.0f);
-        XMVECTOR At = XMVectorSet(0.0f, 0.0f, 0.0f, 0.0f);
-        XMVECTOR Up = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-        XMMATRIX view = XMMatrixLookAtLH(Eye, At, Up);
-
         // Initialize the projection matrix
-        XMMATRIX projection = XMMatrixPerspectiveFovLH(XM_PIDIV2, /*width / (FLOAT)height*/ 640.0f/480.0f, 0.01f, 100.0f);
-        constants_.mWorld = XMMatrixTranspose(world);
-        constants_.mView = XMMatrixTranspose(view);
-        constants_.mProjection = XMMatrixTranspose(projection);
+        XMMATRIX projection = XMMatrixTranspose(XMMatrixPerspectiveFovLH(XM_PIDIV2, /*width / (FLOAT)height*/ 640.0f/480.0f, 0.01f, 100.0f));
+        constants_.world_transform      = world_matrix::identity();
+        constants_.view_transform       = view_matrix::identity();
+        memcpy(&constants_.projection_transform, &projection, sizeof(projection));
 
     }
 
@@ -485,8 +467,7 @@ public:
     }
 
     void set_view(const world_pos& camera_pos, const world_pos& camera_target) {
-        XMMATRIX view = XMMatrixLookAtLH(make_xmvec(camera_pos, 0.0f), make_xmvec(camera_target, 0.0f), make_xmvec(world_up, 0.0f));
-        constants_.mView = XMMatrixTranspose(view);
+        constants_.view_transform = transposed(view_matrix::factory::look_at_lh(camera_pos, camera_target, world_up));
     }
 
     void render() {
@@ -518,11 +499,11 @@ private:
     ComPtr<ID3D11DeviceContext>     immediate_context_;
     ComPtr<ID3D11RenderTargetView>  render_target_view_;
     ComPtr<ID3D11DepthStencilView>  depth_stencil_view_;
-    XMMATRIX                        view_matrix;
-    XMMATRIX                        projection_matrix;
+    view_matrix                     view_transform_;
+    projection_matrix               projection_transform_;
     std::vector<d3d11_renderable*>  renderables_;
     d3d11_create_context            create_context_;
-    ConstantBuffer                  constants_;
+    shader_constants                constants_;
 };
 
 d3d11_renderer::d3d11_renderer(win32_main_window& window) : impl_(new impl{window})

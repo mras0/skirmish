@@ -98,7 +98,7 @@ int main()
         d3d11_renderer renderer{w};
 
         auto bunny = load_obj_for_render(renderer, *data_fs.open("bunny.obj"));
-        bunny->set_world_transform(world_transform::factory::translation({1,1,0}));
+        bunny->set_world_transform(world_matrix::factory::translation({1,1,0}));
         renderer.add_renderable(*bunny);
 
         auto terrain_obj = make_terrian_obj(renderer);
@@ -142,7 +142,7 @@ int main()
             camera_target[2] = 0.7f;
 
             // Update render stuff
-            q3player.update(t, world_transform::factory::translation(camera_target) * world_transform::factory::rotation_z(view_ang - pi_f/2.0f));
+            q3player.update(t, world_matrix::factory::translation(camera_target) * world_matrix::factory::rotation_z(view_ang - pi_f/2.0f));
 
             std::ostringstream oss;
             oss << camera_pos << " " << camera_target << " viewdir: " << view_ang;
