@@ -30,6 +30,11 @@ if (WIN32)
     add_definitions("-DWIN32 -D_SCL_SECURE_NO_WARNINGS -DUNICODE -D_UNICODE")
 endif()
 
+if (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
+    # On windows use: cmake .. -TLLVM-vs2014 -G"Visual Studio 14 2015 Win64"
+    add_definitions("-Wno-missing-braces -Wall -Wextra")
+endif()
+
 enable_testing()
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --force-new-ctest-process --output-on-failure --build-config "$<CONFIGURATION>")
 

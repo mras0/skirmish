@@ -4,11 +4,6 @@
 
 namespace {
 
-constexpr float lerp(float a, float b, float x)
-{
-    return a + (b - a) * x;
-}
-
 float interpolate(float a, float b, float x)
 {
     const auto f = (1 - cosf(x * 3.1415927f)) * .5f;

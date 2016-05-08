@@ -500,8 +500,6 @@ private:
     ComPtr<ID3D11DeviceContext>     immediate_context_;
     ComPtr<ID3D11RenderTargetView>  render_target_view_;
     ComPtr<ID3D11DepthStencilView>  depth_stencil_view_;
-    view_matrix                     view_transform_;
-    projection_matrix               projection_transform_;
     std::vector<d3d11_renderable*>  renderables_;
     d3d11_create_context            create_context_;
     shader_constants                constants_;
