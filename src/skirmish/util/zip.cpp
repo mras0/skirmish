@@ -95,7 +95,7 @@ private:
 #if 1
         while (offset) {
             ensure_bytes_available();
-            const auto now = std::min(peek().size(), static_cast<uint64_t>(offset));
+            const auto now = std::min(peek().size(), static_cast<size_t>(offset));
             set_cursor(peek().begin() + now);
             offset -= now;
         }

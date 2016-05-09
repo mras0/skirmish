@@ -33,7 +33,7 @@ public:
 
     array_view<uint8_t> refill() {
         assert(!stream_.avail_out);
-        const auto avail_out_on_start = static_cast<uInt>(std::min(buffer_size, uncompressed_size_ - stream_.total_out));
+        const auto avail_out_on_start = std::min(static_cast<uInt>(buffer_size), static_cast<uInt>(uncompressed_size_ - stream_.total_out));
         stream_.avail_out = avail_out_on_start;
         stream_.next_out  = buffer_;
 
@@ -44,7 +44,7 @@ public:
                 assert(stream_.total_in < compressed_size_);
                 s_.ensure_bytes_available();
                 auto in_buf = s_.peek();
-                stream_.avail_in = static_cast<uInt>(std::min(in_buf.size(), compressed_size_ - stream_.total_in));
+                stream_.avail_in = std::min(static_cast<uInt>(in_buf.size()), static_cast<uInt>(compressed_size_ - stream_.total_in));
                 stream_.next_in  = const_cast<uint8_t*>(in_buf.begin());
                 s_.seek(stream_.avail_in, seekdir::cur); // mark bytes as consumed
             }

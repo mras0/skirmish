@@ -101,7 +101,7 @@ array_view<uint8_t> in_file_stream::refill_in_file_stream()
     if (!byte_count) {
         return set_failed(std::make_error_code(std::errc::io_error));
     }
-    return make_array_view(impl_->buffer_, byte_count);
+    return make_array_view(impl_->buffer_, static_cast<size_t>(byte_count));
 }
 
 } } // namespace skirmish::util
