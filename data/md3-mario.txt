@@ -1,0 +1,35 @@
+
+7/17/01
+-------------------------------------------------
+Model Name             : Mario
+
+installation directory : quake3/baseq3/
+
+Author                 : Bob (The Digital Master) Bishop
+
+Email Address          : Tank_567@yahoo.com
+
+Model description      : It's mario from nintendo
+
+Additional Credits to  : id Software, nintendo, and me 
+
+-----------------------------------------------
+* Play Information *
+
+New Sounds             : YES
+CTF Skins              : YES
+VWEP Support           : NO
+
+
+* Construction *
+Poly Count             : 832
+Skin Count             : 3 Skins
+Editor used            : 3dmax4, Potoshop6.0 ,NPherno's .md3 Compiler, pop_n_fresh's Max to MD3 Exporter
+
+---------------------------------------------
+Copyright, Permissions 
+
+QUAKE(R) and QUAKE II(R) are registered trademarks of id Software, Inc.
+
+
+

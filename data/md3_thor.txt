@@ -1,0 +1,42 @@
+10-24-2000
+================================================================
+Model Name              : thor
+installation directory  : quake2/baseq2/players/thor
+Author                  : chopp3r a.k.a. Rob Rich
+Email Address           : chopp3r@bellsouth.net
+
+Model description       :  Thor was thought to have died on the day of Ragnarok after slaying the midgard serpent                            Jormungand. However the Vadrigar had other plans. They took the God of thunder and left                            his mighty hammer, Mjollnir behind. Thor is forced to use and perfect the strange weapons                           the Arena Masters  put before him, only he is utterly convinced he will be reunited with                           his trusty hammer, someday. 
+
+Other info              :  My first completed plugin player model. 
+
+Additional Credits to   : <id Software>
+
+Thanks to               : <Polycount for inspiration and tutorials. pkboy for testing and covering my ass at work.>
+================================================================
+* Play Information *
+
+New Sounds              : <NO> uses id standard except uses id Doom for taunt
+Ra3 Skins               : <YES>
+lods                    : <NO>
+bots                    : <NO>
+ 
+* Construction *
+Poly Count              : <1000 polys> +3 for tags..=)
+Vert Count              : <595>
+Skin Count              : <1 Skin> had to include red and blue for Ra3 and such (but they are really just colored                            versions of the original)
+Base                    : <New model>
+Editor used             : <3dsmax3.1, CS 2, Photoshop 5, popnfreshs plugin, Wrath's template, Steeds bipeds (just                              for reference, I animated this myself), q3data
+Known Bugs              : <skin mapping>
+Build/Animation time    : <hahaha> forever
+
+
+* How to use this model *
+
+<INSTALLATION INFO>     : Unzip q3md3-thor.zip into your baseq3 folder
+
+* Copyright *
+
+QUAKE(R) and QUAKE II(R) are registered trademarks of id Software, Inc.
+This zip file and all contained may be freely distributed , UNALTERED .Under no circumstances can it be used for any commercial purpose without express permission . 
+
+

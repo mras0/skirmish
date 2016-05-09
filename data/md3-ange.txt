@@ -1,0 +1,52 @@
+05/17/00
+================================================================
+Model Name              : Zeke/Ezekiel
+installation directory  : Quake III Arena/baseq3
+Authors                 : Greg "KewtZombie" Szucs & Mime
+Skin Author 		: Greg "KewtZombie" Szucs
+Email Address           : KewtZombie : kewt@followthezombie.com 
+			  Mime : mime@followthezombie.com
+
+Model description       : "The Avenging Messenger of God"
+			  preview model from the upcoming mod Follow The Zombie
+
+Website 		: www.followthezombie.com
+
+Other info              : The animation used here is a modified Paul Steed's .bip, Zeke will have a completely different
+			  one within the mod as he will most likely be a melee fighter with a sword.
+			  Some of the shaders are made using textures already existing in pak1.pk3.(quadmap2.jpg, tinfx2b.tga)
+			  We tested the model on P II 400 128MB RAM with riva TNT ( 8 bots 4 of them were Zeke ),
+			  and it runs smoothly even with the large amount of .tga used on this model ( mostly for shaders ).
+			  Plz forgive us for our poor english as it is not our mothertongue =P
+				
+			  THANX YOU FOR DOWNLOADING AND ENJOY !
+			  
+
+Thanks to               : Rv2K for lending me his microphone =P ( yeah homemade sounds ! )
+================================================================
+* Play Information *
+
+New Sounds              : YES
+CTF Skins               : YES
+BOTs			: YES ( 2 ) , Zeke with the regular skin and Ezekiel with the fallen angel one, 
+			              both share the same AI and chat files.
+
+
+* Construction *
+Poly Count              : 820
+Vert Count              : 475
+Skin Count              : 4
+Base                    : common legend with a gothic touch
+Editor used             : 3dsmax, Character studio, Photoshop
+Known Bugs              : While performing a "Look Up" you can see the hair going through the collar a little bit from rearview.
+			  Will be fixed in "melee" animation
+Build/Animation time    : ?
+
+
+* How to use this model *
+
+Just unzip it in your Quake III Arena/baseq3 directory
+
+Quake III Arena is a registered trademark of id Software, Inc. 
+
+
